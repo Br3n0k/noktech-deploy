@@ -4,72 +4,80 @@ import os
 from pathlib import Path
 from .base_deployer import BaseDeployer
 from ..core.file_manager import FileManager
+import asyncio
 
 class FTPDeployer(BaseDeployer):
-    def __init__(self, host: str, user: str, password: str, port: int = 21, dest_path: Optional[str] = None):
-        super().__init__(host, user, password, port)
+    def __init__(self, host: str, user: str, password: Optional[str] = None, port: int = 21, dest_path: str = ''):
+        super().__init__(host=host, user=user, password=password, port=port)
         self.ftp: Optional[FTP] = None
         self.dest_path = dest_path
-        self.file_manager = FileManager()
 
-    def connect(self) -> None:
+    async def connect(self) -> None:
+        """Conecta ao servidor FTP"""
         try:
-            self.ftp = FTP()
-            self.ftp.connect(self.host, self.port)
-            self.ftp.login(self.user, self.password)
+            def _connect():
+                ftp = FTP()
+                ftp.connect(self.host, self.port)
+                ftp.login(self.user, self.password or '')
+                return ftp
+                
+            self.ftp = await asyncio.get_event_loop().run_in_executor(None, _connect)
         except Exception as e:
-            raise ConnectionError(f"Erro ao conectar via FTP: {str(e)}")
+            self.ftp = None
+            raise ConnectionError(f"Erro ao conectar ao FTP: {str(e)}")
 
-    def ensure_remote_dir(self, path: str) -> None:
+    async def disconnect(self) -> None:
+        if self.ftp:
+            self.ftp.quit()
+
+    async def ensure_remote_dir(self, path: str) -> None:
         if not self.ftp:
-            raise ConnectionError("FTP não inicializado")
+            raise ConnectionError("FTP não conectado")
             
+        parts = path.split('/')
         current = ''
-        for part in path.split('/'):
+        
+        for part in parts:
             if not part:
                 continue
-            current += '/' + part
+            current = f"{current}/{part}"
             try:
-                self.ftp.cwd(current)
-            except:
                 self.ftp.mkd(current)
+            except:
+                pass
 
-    def deploy_files(self, files_path: str, dest_path: str) -> None:
+    async def file_exists(self, remote_path: str) -> bool:
         if not self.ftp:
-            raise ConnectionError("FTP não inicializado")
+            raise ConnectionError("FTP não conectado")
+        try:
+            self.ftp.size(remote_path)
+            return True
+        except:
+            return False
+
+    async def _deploy_file(self, local_path: str, remote_path: str):
+        if not self.ftp:
+            raise ConnectionError("FTP não conectado")
+            
+        remote_dir = os.path.dirname(remote_path)
+        if remote_dir:
+            await self.ensure_remote_dir(remote_dir)
+            
+        with open(local_path, 'rb') as f:
+            self.ftp.storbinary(f'STOR {remote_path}', f)
+
+    async def handle_change(self, path: str, event_type: str) -> None:
+        if not self.ftp:
+            raise ConnectionError("FTP não conectado")
             
         try:
-            files_to_deploy = self.file_manager.collect_files(files_path)
-            
-            for local_path, relative_path in files_to_deploy:
-                remote_path = os.path.join(dest_path, relative_path).replace('\\', '/')
-                self.ensure_remote_dir(str(Path(remote_path).parent))
-                
-                with open(local_path, 'rb') as f:
-                    self.ftp.storbinary(f'STOR {remote_path}', f)
-                    
-        except Exception as e:
-            raise Exception(f"Erro no deploy: {str(e)}")
-
-    def disconnect(self) -> None:
-        if self.ftp:
-            self.ftp.quit() 
-
-    def handle_change(self, path: str, event_type: str) -> None:
-        if not self.ftp:
-            raise ConnectionError("FTP não inicializado")
-        if not self.dest_path:
-            raise ValueError("Caminho de destino não definido")
-            
-        try:
-            relative_path = os.path.relpath(path, start=self.file_manager.base_path)
+            relative_path = os.path.relpath(path)
             remote_path = os.path.join(self.dest_path, relative_path).replace('\\', '/')
             
             if event_type in ('created', 'modified'):
-                self.ensure_remote_dir(str(Path(remote_path).parent))
-                with open(path, 'rb') as f:
-                    self.ftp.storbinary(f'STOR {remote_path}', f)
+                await self.ensure_remote_dir(str(Path(remote_path).parent))
+                await self._deploy_file(path, remote_path)
             elif event_type == 'deleted':
                 self.ftp.delete(remote_path)
         except Exception as e:
-            raise Exception(f"Erro ao processar mudança via FTP: {str(e)}")
+            raise Exception(f"Erro ao processar mudança: {str(e)}")

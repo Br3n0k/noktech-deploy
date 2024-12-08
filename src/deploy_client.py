@@ -5,6 +5,26 @@ import sys
 from typing import Optional, List
 from cryptography.utils import CryptographyDeprecationWarning
 import os
+from dataclasses import dataclass
+import asyncio
+
+@dataclass
+class Args:
+    protocol: str = ''
+    host: str = ''
+    user: str = ''
+    password: Optional[str] = None
+    key_path: Optional[str] = None
+    port: int = 0
+    files_path: str = ''
+    dest_path: str = ''
+    watch: bool = False
+    ignore_patterns: Optional[List[str]] = None
+    ignore_file: Optional[str] = None
+
+    def __post_init__(self):
+        if self.ignore_patterns is None:
+            self.ignore_patterns = []
 
 # Suprimir avisos de depreciação do Paramiko
 warnings.filterwarnings(
@@ -27,11 +47,15 @@ class DeployClient:
         self.logger = Logger(log_file=Logger.get_default_log_file())
         self.config = Config()
         self.deployer = None
-        self.file_manager = None
+        self.files_path = None
+        self.ignore_rules = None
         self.i18n = I18n()
 
-    def setup_deployer(self, args):
+    async def setup_deployer(self, args):
         """Configura o deployer baseado nos argumentos"""
+        if not args.protocol:
+            raise ValueError(self.i18n.get("cli.missing_protocol"))
+            
         try:
             if args.protocol == 'ssh':
                 self.deployer = SSHDeployer(
@@ -52,62 +76,57 @@ class DeployClient:
                 )
             elif args.protocol == 'local':
                 self.deployer = LocalDeployer(
-                    dest_base=args.dest_path
+                    source_path=args.files_path,
+                    dest_path=args.dest_path
                 )
+            else:
+                raise ValueError(self.i18n.get("cli.invalid_protocol").format(args.protocol))
+                
         except Exception as e:
             self.logger.error(f"Erro ao configurar deployer: {str(e)}")
-            sys.exit(1)
+            raise
 
-    def handle_file_change(self, path: str, event_type: str):
+    async def handle_file_change(self, path: str, event_type: str):
         """Manipula mudanças nos arquivos quando em modo watch"""
         try:
             if self.deployer:
-                self.deployer.handle_change(path, event_type)
+                await self.deployer.handle_change(path, event_type)
         except Exception as e:
             self.logger.error(f"Erro ao processar mudança: {str(e)}")
 
-    def run(self):
-        parser = self.create_parser()
-        args = parser.parse_args()
-
-        if args.version:
-            print(f"noktech-deploy versão {VERSION}")
-            return
-
-        # Configura regras de ignore
-        ignore_rules = self.setup_ignore_rules(args)
-        
-        # Passa as regras para o deployer
-        if self.deployer:
-            self.deployer.ignore_rules = ignore_rules
-
-        # Configura deployer
-        self.setup_deployer(args)
-
-        # Modo de observação
-        if args.watch:
-            watcher = DirectoryWatcher(
-                args.files_path,
-                self.handle_file_change,
-                ignore_rules,
-                self.logger
-            )
-            watcher.start()
-        else:
-            # Deploy único
+    async def run(self, args):
+        try:
+            self.logger.info(self.i18n.get("deploy.start"))
+            
+            await self.setup_deployer(args)
             if not self.deployer:
-                raise ValueError("Deployer não configurado")
+                raise ValueError(self.i18n.get("deploy.error_no_deployer"))
                 
-            try:
-                self.deployer.connect()
-                self.deployer.deploy_files(args.files_path, args.dest_path)
-                self.logger.info("Deploy concluído com sucesso!")
-            except Exception as e:
-                self.logger.error(f"Erro no deploy: {str(e)}")
-                sys.exit(1)
-            finally:
-                if self.deployer:
-                    self.deployer.disconnect()
+            if args.protocol != 'local':
+                self.logger.info(self.i18n.get("connection.connecting").format(args.host))
+            else:
+                self.logger.info(self.i18n.get("local.copying").format(args.files_path, args.dest_path))
+                
+            await self.deployer.connect()
+            
+            if args.protocol != 'local':
+                self.logger.info(self.i18n.get("connection.connected"))
+            
+            if args.watch:
+                self.logger.info(self.i18n.get("watch.start"))
+                await self.watch_mode()
+            else:
+                await self.deployer.deploy_files(args.files_path, args.dest_path)
+                self.logger.info(self.i18n.get("deploy.complete"))
+                
+        except Exception as e:
+            self.logger.error(self.i18n.get("deploy.error").format(str(e)))
+            raise
+        finally:
+            if self.deployer:
+                await self.deployer.disconnect()
+                if args.protocol != 'local':
+                    self.logger.info(self.i18n.get("connection.disconnected"))
 
     @staticmethod
     def create_parser() -> argparse.ArgumentParser:
@@ -174,100 +193,36 @@ class DeployClient:
         print(banner)
         print(info)
 
-    def interactive_mode(self) -> None:
+    async def interactive_mode(self, args: Optional[Args] = None):
+        """Modo interativo para configurar o deploy"""
         self.show_banner()
         print(f"\n=== {self.i18n.get('mode.interactive')} ===\n")
         
-        # Protocolo
-        print(self.i18n.get('protocol.select'))
-        print(f"1. {self.i18n.get('protocol.ssh')}")
-        print(f"2. {self.i18n.get('protocol.ftp')}")
-        print(f"3. {self.i18n.get('protocol.local')}")
-        protocol_choice = input(f"{self.i18n.get('input.choice')} (1-3): ").strip()
-        
-        protocol_map = {'1': 'ssh', '2': 'ftp', '3': 'local'}
-        protocol = protocol_map.get(protocol_choice)
-        
-        if not protocol:
-            print(self.i18n.get('error.invalid_option'))
-            return
-        
-        # Caminhos
-        files_path = input(f"\n{self.i18n.get('input.source_path')} ").strip()
-        dest_path = input(f"{self.i18n.get('input.dest_path')} ").strip()
-        
-        # Configuração de ignore
-        print(f"\n{self.i18n.get('ignore.config')}:")
-        use_gitignore = input(f"{self.i18n.get('ignore.use_git')} (s/n): ").lower().startswith(
-            's' if self.i18n.current_lang == 'pt_br' else 'y'
-        )
-        use_custom = input(f"{self.i18n.get('ignore.use_custom')} (s/n): ").lower().startswith(
-            's' if self.i18n.current_lang == 'pt_br' else 'y'
-        )
-        
-        # Criar instância de Args em vez de usar type()
-        args = Args()
-        args.protocol = protocol
-        args.files_path = files_path
-        args.dest_path = dest_path
-        
-        if protocol in ['ssh', 'ftp']:
-            args.host = input("Host: ").strip()
-            args.user = input("Usuário: ").strip()
+        if args is None:
+            args = Args()
             
-            if protocol == 'ssh':
-                use_key = input("Usar chave SSH? (s/n): ").lower().startswith('s')
-                if use_key:
-                    args.key_path = input("Caminho da chave SSH: ").strip()
-                    args.password = None
-                else:
-                    args.password = input("Senha: ").strip()
-                    args.key_path = None
-            else:
-                args.password = input("Senha: ").strip()
+        # Coleta dados do usuário
+        args.protocol = input(f"{self.i18n.get('cli.enter_protocol')} (ssh/ftp/local): ").lower()
+        if args.protocol not in ['ssh', 'ftp', 'local']:
+            raise ValueError(self.i18n.get('cli.invalid_protocol').format(args.protocol))
             
-            port_input = input(f"Porta ({22 if protocol == 'ssh' else 21}): ").strip()
-            args.port = int(port_input) if port_input else (22 if protocol == 'ssh' else 21)
+        if args.protocol != 'local':
+            args.host = input(f"{self.i18n.get('cli.enter_host')}: ")
+            args.user = input(f"{self.i18n.get('cli.enter_user')}: ")
+            args.password = input(f"{self.i18n.get('cli.enter_password')} ({self.i18n.get('cli.optional')}): ") or None
+            
+        args.files_path = input(f"{self.i18n.get('cli.enter_source_path')}: ")
+        args.dest_path = input(f"{self.i18n.get('cli.enter_dest_path')}: ")
         
-        # Modo watch
-        args.watch = input("\nAtivar modo de observação? (s/n): ").lower().startswith('s')
-        
-        # Pergunta sobre arquivos a ignorar
-        print("\nConfiguração de arquivos ignorados:")
-        args.ignore_file = '.gitignore' if use_gitignore else None
-        if use_custom:
-            print("Digite os padrões (um por linha, Enter vazio para terminar):")
-            patterns = []
-            while True:
-                pattern = input().strip()
-                if not pattern:
-                    break
-                patterns.append(pattern)
-            args.ignore_patterns = patterns
-        
-        print("\nIniciando deploy...\n")
+        watch_response = input(f"{self.i18n.get('cli.watch_mode')} (y/n): ").lower()
+        args.watch = watch_response.startswith('y')
         
         try:
-            self.setup_deployer(args)
-            if not self.deployer:
-                raise ValueError("Deployer não configurado")
-            
-            self.deployer.connect()
-            self.deployer.deploy_files(args.files_path, args.dest_path)
-            
-            if args.watch:
-                print("\nModo de observação ativado. Pressione Ctrl+C para sair.")
-                self.watch_directory(args)
-            
-            print("\nDeploy concluído com sucesso!")
-            
+            await self.run(args)
         except Exception as e:
-            print(f"\nErro: {str(e)}")
-        finally:
-            if self.deployer:
-                self.deployer.disconnect()
+            print(f"\n{self.i18n.get('cli.error')}: {str(e)}")
 
-    def watch_directory(self, args):
+    async def watch_directory(self, args):
         """Inicia o modo de observação"""
         watcher = DirectoryWatcher(
             args.files_path,
@@ -275,7 +230,7 @@ class DeployClient:
             ignore_rules=None,  # Você pode adicionar regras de ignore aqui
             logger=self.logger
         )
-        watcher.start()
+        await watcher.start()
 
     def setup_ignore_rules(self, args) -> IgnoreRules:
         """Configura regras de ignore para o deploy"""
@@ -293,9 +248,7 @@ class DeployClient:
             '*.pyo',
             '*.pyd',
             '.Python',
-            'env/',
             'venv/',
-            '.env',
             '.venv',
             'build/',
             'dist/',
@@ -321,29 +274,47 @@ class DeployClient:
         
         return rules
 
-class Args:
-    def __init__(self):
-        self.protocol: str = ''
-        self.host: str = ''
-        self.user: str = ''
-        self.password: Optional[str] = None
-        self.key_path: Optional[str] = None
-        self.port: int = 0
-        self.files_path: str = ''
-        self.dest_path: str = ''
-        self.watch: bool = False
-        self.ignore_patterns: List[str] = []
-        self.ignore_file: Optional[str] = None
+    async def watch_mode(self):
+        """Inicia o modo de observação"""
+        try:
+            if not self.files_path:
+                raise ValueError(self.i18n.get("watch.no_path"))
+                
+            watcher = DirectoryWatcher(
+                self.files_path,
+                self.handle_file_change,
+                ignore_rules=self.ignore_rules,
+                logger=self.logger
+            )
+            await watcher.start()
+        except Exception as e:
+            self.logger.error(self.i18n.get("watch.error").format(str(e)))
+            raise
 
 def main():
     try:
         client = DeployClient()
+        parser = client.create_parser()
+        args = parser.parse_args()
         
-        if len(sys.argv) == 1:  # Sem argumentos
-            client.interactive_mode()
+        if len(sys.argv) == 1:
+            asyncio.run(client.interactive_mode(Args()))
         else:
-            client.run()
-            
+            # Converte args do parser para nossa classe Args
+            deploy_args = Args(
+                protocol=args.protocol,
+                host=args.host,
+                user=args.user,
+                password=args.password,
+                key_path=args.key_path,
+                port=args.port,
+                files_path=args.files_path,
+                dest_path=args.dest_path,
+                watch=args.watch,
+                ignore_patterns=args.ignore_patterns,
+                ignore_file=args.ignore_file
+            )
+            asyncio.run(client.run(deploy_args))
     except KeyboardInterrupt:
         print("\nOperação cancelada pelo usuário.")
     except Exception as e:

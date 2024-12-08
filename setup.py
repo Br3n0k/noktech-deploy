@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="noktech-deploy",
-    version="0.1.0",
+    version="0.1.1",
     description="Cliente de deploy avançado com suporte a múltiplos protocolos e observação de mudanças em tempo real",
     author="Brendown Ferreira",
     author_email="br3n0k@gmail.com",

@@ -1,31 +1,53 @@
-import PyInstaller.__main__
 import os
 import sys
+import shutil
+import subprocess
+from pathlib import Path
 
-# Garante caminhos absolutos
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-ICON_PATH = os.path.join(BASE_DIR, 'src', 'assets', 'logo.ico')
-VERSION_FILE = os.path.join(BASE_DIR, 'version_info.txt')
-ASSETS_PATH = os.path.join(BASE_DIR, 'src', 'assets')
+def clean_build_dirs():
+    """Limpa diretórios de build anteriores"""
+    dirs_to_clean = ['build', 'dist']
+    for dir_name in dirs_to_clean:
+        if os.path.exists(dir_name):
+            shutil.rmtree(dir_name)
 
-# Verifica se os arquivos existem
-if not os.path.exists(ICON_PATH):
-    print(f"Erro: Ícone não encontrado em {ICON_PATH}")
-    sys.exit(1)
+def build_executable():
+    """Executa o build do executável"""
+    if sys.platform == 'win32':
+        # Build com cx_Freeze no Windows
+        subprocess.run([sys.executable, 'build_config.py', 'build'], check=True)
+    else:
+        # Build com PyInstaller no Linux/Mac
+        import PyInstaller.__main__
+        
+        BASE_DIR = Path(__file__).parent
+        ICON_PATH = BASE_DIR / 'src' / 'assets' / 'logo.ico'
+        ASSETS_PATH = BASE_DIR / 'src' / 'assets'
+        
+        PyInstaller.__main__.run([
+            str(BASE_DIR / 'src' / 'deploy_client.py'),
+            '--name=noktech-deploy',
+            '--onefile',
+            '--console',
+            f'--icon={ICON_PATH}',
+            f'--add-data={ASSETS_PATH}{os.pathsep}assets',
+            '--clean',
+            '--noconfirm',
+        ])
 
-if not os.path.exists(VERSION_FILE):
-    print(f"Erro: Arquivo de versão não encontrado em {VERSION_FILE}")
-    sys.exit(1)
+def main():
+    """Função principal do build"""
+    try:
+        print("Limpando diretórios anteriores...")
+        clean_build_dirs()
+        
+        print("Iniciando build...")
+        build_executable()
+        
+        print("Build concluído com sucesso!")
+    except Exception as e:
+        print(f"Erro durante o build: {e}")
+        sys.exit(1)
 
-# Configuração do build
-PyInstaller.__main__.run([
-    os.path.join(BASE_DIR, 'src', 'deploy_client.py'),
-    '--name=noktech-deploy',
-    '--onefile',
-    '--console',
-    f'--icon={ICON_PATH}',
-    f'--version-file={VERSION_FILE}',
-    f'--add-data={ASSETS_PATH}{os.pathsep}assets',
-    '--clean',
-    '--noconfirm',
-]) 
+if __name__ == "__main__":
+    main() 

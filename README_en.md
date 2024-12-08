@@ -9,13 +9,9 @@
   <img src="src/assets/logo.webp" alt="NokTech Deploy Logo" width="200"/>
 </p>
 
-I'm sure you've been in situations where you needed to deploy files to a server in different scenarios and IDEs,
-and ended up facing problems such as: having to use different programs or scripts for each situation, having to manually
-configure each host, or even wasting time configuring file ignores. NokTech Deploy was created to solve these problems!
-With it, you can deploy files to a server quickly and easily, with support for multiple protocols and real-time change monitoring.
-And best of all, it's open source!
-
 An advanced and flexible deployment client with support for multiple protocols and real-time change monitoring.
+Perfect for developers who need a robust and reliable solution to automate the deployment process,
+whether via SSH, FTP, or even locally.
 
 ## 📋 Features
 
@@ -24,10 +20,20 @@ An advanced and flexible deployment client with support for multiple protocols a
   - FTP
   - Local (local/network file copy)
 - **Real-time Watching**
+  - Automatically detects and syncs changes
+  - Support for creation, modification, and deletion events
 - **Advanced Ignore System**
+  - Compatible with .gitignore patterns
+  - Support for multiple ignore files
 - **Interactive Interface**
+  - User-friendly CLI mode
+  - Support for automation arguments
 - **Multi-language Support**
+  - English
+  - Portuguese
 - **Complete Logging**
+  - Detailed operation logs
+  - Support for different log levels
 
 ## 🚀 Installation
 
@@ -46,61 +52,33 @@ poetry install
 ## 💻 Usage
 
 ### Interactive Mode
-Run without arguments for guided interface:
 ```bash
 noktech-deploy
 ```
 
-### SSH with Password
+### SSH
 ```bash
-noktech-deploy --protocol ssh \
-               --host example.com \
-               --user deploy \
-               --password "your_password" \
-               --dest-path /var/www/app \
-               --files-path ./dist
-```
-
-### SSH with Key
-```bash
-noktech-deploy --protocol ssh \
-               --host example.com \
-               --user deploy \
-               --key-path ~/.ssh/id_rsa \
-               --dest-path /var/www/app \
-               --files-path ./dist
+noktech-deploy --protocol ssh --host example.com --user deploy --files-path ./dist --dest-path /var/www/app
 ```
 
 ### FTP
 ```bash
-noktech-deploy --protocol ftp \
-               --host ftp.example.com \
-               --user ftpuser \
-               --password pass123 \
-               --dest-path /public_html \
-               --files-path ./site
+noktech-deploy --protocol ftp --host ftp.example.com --user ftpuser --files-path ./site --dest-path /public_html
 ```
 
 ### Local
 ```bash
-noktech-deploy --protocol local \
-               --dest-path /mnt/backup \
-               --files-path ./data
+noktech-deploy --protocol local --files-path ./data --dest-path /mnt/backup
 ```
 
 ### Watch Mode
 ```bash
-noktech-deploy --protocol ssh \
-               --host example.com \
-               --watch \
-               # ... other options ...
+noktech-deploy --protocol ssh --host example.com --watch
 ```
 
 ## 📝 Configuration
 
-### Ignored Files
-
-#### .deployignore (Recommended)
+### .deployignore
 ```plaintext
 # Development files
 __pycache__/
@@ -114,18 +92,7 @@ build/
 *.log
 ```
 
-#### Via Command Line
-```bash
-noktech-deploy --ignore-patterns "*.temp" "logs/*" \
-               # ... other options ...
-```
-
-[Complete ignore documentation](docs/ignore_rules.md)
-
-### Persistent Settings
-
-NokTech Deploy stores settings in `~/.noktech-deploy/config.json`:
-
+### config.json
 ```json
 {
     "default_protocol": "ssh",
@@ -141,23 +108,14 @@ NokTech Deploy stores settings in `~/.noktech-deploy/config.json`:
 
 ## 📚 Documentation
 
+- [Quick Start Guide](docs/quickstart.md)
+- [Advanced Configuration](docs/configuration.md)
 - [API Reference](docs/api.md)
-- [Supported Protocols](docs/protocols.md)
-- [Watch Mode](docs/watching.md)
-- [Development](docs/development.md)
-- [Examples](docs/examples.md)
-
-## 🤝 Contributing
-
-1. Fork the project
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add: amazing feature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+- [Contributing](docs/contributing.md)
 
 ## 📄 License
 
-Distributed under the MIT License. See `LICENSE` for more information.
+MIT License - see [LICENSE](LICENSE) for more information.
 
 ## 👤 Author
 

@@ -12,6 +12,17 @@
 - Documentação completa
 - Suite de testes
 
+## [0.1.1] - 2024-12-08
+
+### Adicionado
+- Suporte a Windows
+- Suporte a Linux
+- Suporte a MacOS
+- Build automático
+- Build customizável
+- Suporte a Portugês Brasileiro
+- Suporte a Inglês
+
 ### Próximas Versões
 - Suporte a mais protocolos (S3, FTPS, etc)
 - Interface gráfica

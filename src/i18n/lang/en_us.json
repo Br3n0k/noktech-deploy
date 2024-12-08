@@ -22,6 +22,7 @@
     "input.key_path": "SSH key path:",
     "input.port": "Port ({}):",
     "input.watch": "Enable watch mode? (y/n):",
+    "input.overwrite": "Overwrite existing files?",
     
     "ignore.config": "Ignored files configuration",
     "ignore.use_git": "Use .gitignore?",
@@ -35,5 +36,48 @@
     
     "success.connected": "Connected successfully",
     "success.deployed": "Deploy completed successfully",
-    "success.watching": "Watch mode enabled. Press Ctrl+C to exit"
+    "success.watching": "Watch mode enabled. Press Ctrl+C to exit",
+    "info.skipping_file": "Skipping existing file: {}",
+    
+    "deploy.start": "Starting deployment...",
+    "deploy.complete": "Deployment completed successfully!",
+    "deploy.error": "Error during deployment: {}",
+    
+    "watch.start": "Starting watch mode...",
+    "watch.file_created": "File created: {}",
+    "watch.file_modified": "File modified: {}",
+    "watch.file_deleted": "File deleted: {}",
+    "watch.error": "Error processing change: {}",
+    
+    "connection.connecting": "Connecting to {}...",
+    "connection.connected": "Connected successfully",
+    "connection.error": "Connection error: {}",
+    "connection.disconnected": "Disconnected from server",
+    
+    "ignore.loading": "Loading ignore rules...",
+    "ignore.using_git": "Using .gitignore rules",
+    "ignore.using_deploy": "Using .deployignore rules",
+    "ignore.custom": "Using custom rules",
+    
+    "config.loading": "Loading settings...",
+    "config.saved": "Settings saved",
+    "config.error": "Error loading settings: {}",
+    
+    "cli.missing_args": "Missing required arguments",
+    "cli.invalid_port": "Invalid port: {}",
+    "cli.enter_protocol": "Enter protocol",
+    "cli.enter_host": "Enter host",
+    "cli.enter_user": "Enter user",
+    "cli.enter_password": "Enter password",
+    "cli.enter_source_path": "Enter source path",
+    "cli.enter_dest_path": "Enter destination path",
+    "cli.watch_mode": "Enable watch mode",
+    "cli.optional": "optional",
+    "cli.error": "Error",
+    "cli.missing_protocol": "Protocol not specified",
+    "cli.invalid_protocol": "Invalid protocol: {}",
+    
+    "local.copying": "Copying files from {} to {}",
+    "local.copied": "Files copied successfully",
+    "local.error": "Error copying files: {}"
 } 

@@ -7,25 +7,22 @@ from src.core.file_manager import FileManager
 from src.utils.logger import Logger
 
 class LocalDeployer(BaseDeployer):
-    def __init__(self, dest_base: str, logger: Optional[Logger] = None):
-        super().__init__(host='local', user='', password='', port=0)
-        self.dest_base = os.path.abspath(dest_base)
-        self.file_manager = FileManager(base_path=dest_base)
-        self.logger = logger or Logger()
+    def __init__(self, source_path: str, dest_path: str):
+        super().__init__(host='localhost', user='local', password=None)
+        self.source_path = source_path
+        self.dest_path = dest_path
         
-    def connect(self) -> None:
-        """Verifica se o diretório de destino é acessível"""
-        if not os.path.exists(self.dest_base):
-            try:
-                os.makedirs(self.dest_base)
-            except Exception as e:
-                raise ConnectionError(f"Não foi possível criar o diretório de destino: {str(e)}")
-                
-        if not os.access(self.dest_base, os.W_OK):
-            raise ConnectionError("Sem permissão de escrita no diretório de destino")
+    async def connect(self) -> None:
+        """Conecta ao sistema de arquivos local"""
+        try:
+            if not os.path.exists(self.dest_path):
+                os.makedirs(self.dest_path)
+        except Exception as e:
+            raise ConnectionError(f"Erro ao acessar diretório local: {str(e)}")
 
-    def disconnect(self) -> None:
-        """Não necessário para deploy local"""
+    async def disconnect(self) -> None:
+        """Desconecta do sistema de arquivos local"""
+        # Limpa recursos se necessário
         pass
 
     def ensure_remote_dir(self, path: str) -> None:
@@ -36,30 +33,26 @@ class LocalDeployer(BaseDeployer):
             except Exception as e:
                 raise Exception(f"Erro ao criar diretório: {str(e)}")
 
-    def deploy_files(self, files_path: str, dest_path: str) -> None:
-        """Copia arquivos localmente"""
+    async def deploy_files(self, source_path: str, dest_path: str) -> None:
+        """Deploy de arquivos localmente"""
         try:
-            files_to_deploy = self.file_manager.collect_files(files_path)
-            
-            for local_path, relative_path in files_to_deploy:
-                dest_file = os.path.join(dest_path, relative_path)
-                dest_dir = os.path.dirname(dest_file)
-                
-                self.ensure_remote_dir(dest_dir)
-                
-                try:
-                    shutil.copy2(local_path, dest_file)
-                    self.logger.info(f"Arquivo copiado: {relative_path}")
-                except Exception as e:
-                    self.logger.error(f"Erro ao copiar {relative_path}: {str(e)}")
+            for root, _, files in os.walk(source_path):
+                for file in files:
+                    local_path = os.path.join(root, file)
+                    relative_path = os.path.relpath(local_path, source_path)
+                    remote_path = os.path.join(dest_path, relative_path)
                     
+                    if self.ignore_rules and self.ignore_rules.should_ignore(relative_path):
+                        continue
+                        
+                    await self._deploy_file(local_path, remote_path)
         except Exception as e:
             raise Exception(f"Erro no deploy local: {str(e)}")
 
-    def handle_change(self, path: str, event_type: str) -> None:
+    async def handle_change(self, path: str, event_type: str) -> None:
         try:
-            relative_path = os.path.relpath(path, start=self.file_manager.base_path)
-            dest_path = os.path.join(self.dest_base, relative_path)
+            relative_path = os.path.relpath(path, start=self.source_path)
+            dest_path = os.path.join(self.dest_path, relative_path)
             
             if event_type in ('created', 'modified'):
                 os.makedirs(os.path.dirname(dest_path), exist_ok=True)
@@ -72,11 +65,11 @@ class LocalDeployer(BaseDeployer):
 
     def _cleanup_empty_dirs(self, directory: str) -> None:
         """Remove diretórios vazios recursivamente"""
-        if directory == self.dest_base:
+        if directory == self.dest_path:
             return
             
         try:
-            while directory != self.dest_base:
+            while directory != self.dest_path:
                 if os.path.exists(directory) and not os.listdir(directory):
                     os.rmdir(directory)
                     directory = os.path.dirname(directory)
@@ -84,3 +77,10 @@ class LocalDeployer(BaseDeployer):
                     break
         except Exception as e:
             self.logger.error(f"Erro ao limpar diretórios: {str(e)}") 
+
+    async def file_exists(self, remote_path: str) -> bool:
+        return os.path.exists(remote_path)
+
+    async def _deploy_file(self, local_path: str, remote_path: str):
+        os.makedirs(os.path.dirname(remote_path), exist_ok=True)
+        shutil.copy2(local_path, remote_path) 

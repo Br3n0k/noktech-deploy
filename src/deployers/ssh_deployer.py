@@ -1,5 +1,5 @@
-from paramiko import SSHClient, AutoAddPolicy, SFTPClient
 from typing import Optional
+import asyncssh
 import os
 from pathlib import Path
 from src.deployers.base_deployer import BaseDeployer
@@ -8,70 +8,84 @@ from ..utils.logger import Logger
 import fnmatch
 
 class SSHDeployer(BaseDeployer):
-    def __init__(self, 
-                 host: str, 
-                 user: str, 
-                 password: Optional[str] = None, 
-                 port: int = 22,
-                 key_path: Optional[str] = None,
-                 dest_path: Optional[str] = None,
-                 logger: Optional[Logger] = None):
-        super().__init__(host, user, password or '', port)
+    def __init__(self, host: str, user: str, password: Optional[str] = None, key_path: Optional[str] = None, port: int = 22, dest_path: str = ''):
+        super().__init__(host=host, user=user, password=password, port=port)
         self.key_path = key_path
         self.dest_path = dest_path
-        self.client: Optional[SSHClient] = None
-        self.sftp: Optional[SFTPClient] = None
+        self.sftp: Optional[asyncssh.SFTPClient] = None
+        self.ssh: Optional[asyncssh.SSHClientConnection] = None
         self.file_manager = FileManager()
-        self.logger = logger or Logger()
+        self.logger = Logger()
         
-        # Valida se pelo menos um método de autenticação foi fornecido
-        if not password and not key_path:
-            raise ValueError("É necessário fornecer senha ou caminho da chave SSH")
+    async def connect(self) -> None:
+        """Conecta ao servidor SSH"""
+        conn_params = {
+            'username': self.user,
+            'port': self.port
+        }
         
-    def connect(self) -> None:
-        try:
-            self.client = SSHClient()
-            self.client.set_missing_host_key_policy(AutoAddPolicy())
+        if self.password:
+            conn_params['password'] = self.password
+        elif self.key_path:
+            conn_params['client_keys'] = [self.key_path]
             
-            connect_kwargs = {
-                'hostname': self.host,
-                'port': self.port,
-                'username': self.user,
-                'timeout': 10
-            }
-            
-            # Prioriza autenticação por chave se disponível
-            if self.key_path and os.path.exists(os.path.expanduser(self.key_path)):
-                self.logger.info(f"Conectando via SSH usando chave: {self.key_path}")
-                connect_kwargs['key_filename'] = os.path.expanduser(self.key_path)
-            elif self.password:
-                self.logger.info("Conectando via SSH usando senha")
-                connect_kwargs['password'] = self.password
-            
-            self.client.connect(**connect_kwargs)
-            self.sftp = self.client.open_sftp()
-            self.logger.info("Conexão SSH estabelecida com sucesso")
-            
-        except Exception as e:
-            raise ConnectionError(f"Erro ao conectar via SSH: {str(e)}")
+        self.ssh = await asyncssh.connect(self.host, **conn_params)
+        self.sftp = await self.ssh.start_sftp_client()
 
-    def ensure_remote_dir(self, path: str) -> None:
+    async def disconnect(self) -> None:
+        """Desconecta do servidor"""
+        if self.sftp:
+            self.sftp.exit()
+        if self.ssh:
+            self.ssh.close()
+            await self.ssh.wait_closed()
+
+    async def ensure_remote_dir(self, path: str) -> None:
+        """Garante que o diretório remoto existe"""
         if not self.sftp:
-            raise ConnectionError("SFTP não inicializado")
+            raise ConnectionError("SFTP não conectado")
             
-        path = path.replace('\\', '/').rstrip('/')
-        if not path:
-            return
-            
-        try:
-            self.sftp.stat(path)
-        except:
-            parent = str(Path(path).parent).replace('\\', '/')
-            if parent and parent != '/':
-                self.ensure_remote_dir(parent)
-            self.sftp.mkdir(path)
+        parts = path.split('/')
+        current = ''
+        
+        for part in parts:
+            if not part:
+                continue
+            current = f"{current}/{part}"
+            try:
+                await self.sftp.mkdir(current)
+            except:
+                pass  # Diretório já existe
 
-    def deploy_files(self, files_path: str, dest_path: str) -> None:
+    async def file_exists(self, remote_path: str) -> bool:
+        if not self.sftp:
+            raise ConnectionError("SFTP não conectado")
+        try:
+            await self.sftp.stat(remote_path)
+            return True
+        except FileNotFoundError:
+            return False
+
+    async def _deploy_file(self, local_path: str, remote_path: str):
+        if not self.sftp:
+            raise ConnectionError("SFTP não conectado")
+            
+        remote_dir = os.path.dirname(remote_path)
+        if remote_dir:
+            await self.ensure_remote_dir(remote_dir)
+            
+        await self.sftp.put(local_path, remote_path)
+
+    async def create_remote_dir(self, path: str) -> None:
+        """Cria diretório remoto se não existir"""
+        if not self.sftp:
+            raise ConnectionError("SFTP não conectado")
+        try:
+            await self.sftp.mkdir(path)
+        except:
+            pass  # Diretório já existe
+
+    async def deploy_files(self, files_path: str, dest_path: str) -> None:
         if not self.sftp:
             raise ConnectionError("SFTP não inicializado")
             
@@ -80,32 +94,24 @@ class SSHDeployer(BaseDeployer):
             
             for local_path, relative_path in files_to_deploy:
                 remote_path = os.path.join(dest_path, relative_path).replace('\\', '/')
-                self.ensure_remote_dir(str(Path(remote_path).parent))
-                self.sftp.put(local_path, remote_path)
+                await self.create_remote_dir(str(Path(remote_path).parent))
+                await self.sftp.put(local_path, remote_path)
                 
         except Exception as e:
             raise Exception(f"Erro no deploy: {str(e)}")
 
-    def disconnect(self) -> None:
-        if self.sftp:
-            self.sftp.close()
-        if self.client:
-            self.client.close() 
-
-    def handle_change(self, path: str, event_type: str) -> None:
+    async def handle_change(self, path: str, event_type: str) -> None:
         if not self.sftp:
-            raise ConnectionError("SFTP não inicializado")
-        if not self.dest_path:
-            raise ValueError("Caminho de destino não definido")
+            raise ConnectionError("SFTP não conectado")
             
         try:
-            relative_path = os.path.relpath(path, start=self.file_manager.base_path)
+            relative_path = os.path.relpath(path)
             remote_path = os.path.join(self.dest_path, relative_path).replace('\\', '/')
             
             if event_type in ('created', 'modified'):
-                self.ensure_remote_dir(str(Path(remote_path).parent))
-                self.sftp.put(path, remote_path)
+                await self.ensure_remote_dir(str(Path(remote_path).parent))
+                await self.sftp.put(path, remote_path)
             elif event_type == 'deleted':
-                self.sftp.remove(remote_path)
+                await self.sftp.remove(remote_path)
         except Exception as e:
-            raise Exception(f"Erro ao processar mudança via SSH: {str(e)}") 
+            raise Exception(f"Erro ao processar mudança: {str(e)}") 

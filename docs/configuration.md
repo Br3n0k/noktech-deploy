@@ -1,122 +1,161 @@
 # Configuração
 
-## Arquivo de Configuração
+## Arquivo de Configuração Global
 
-O NokTech Deploy usa um arquivo JSON para armazenar configurações em `~/.noktech-deploy/config.json`.
+O arquivo de configuração principal está localizado em `~/.noktech-deploy/config.json`.
 
-### Estrutura:
+### Estrutura Básica
 
 ```json
 {
     "default_protocol": "ssh",
+    "log_level": "info",
     "hosts": {
         "production": {
             "protocol": "ssh",
             "host": "exemplo.com",
-            "user": "deploy",
-            "port": 22,
-            "auth_type": "key",
-            "key_path": "~/.ssh/deploy_key",
-            "password": null
-        },
-        "staging": {
-            "protocol": "ssh",
-            "host": "staging.exemplo.com",
-            "user": "deploy",
-            "port": 22,
-            "auth_type": "password",
-            "password": "senha_segura",
-            "key_path": null
+            "user": "deploy"
         }
     }
 }
 ```
 
+## Opções de Configuração
+
+### Configurações Globais
+
+| Opção | Tipo | Descrição | Padrão |
+|-------|------|-----------|---------|
+| default_protocol | string | Protocolo padrão | "ssh" |
+| log_level | string | Nível de log | "info" |
+| default_ignore_file | string | Arquivo de ignore padrão | "~/.deployignore" |
+| log_file | string | Arquivo de log | "~/.noktech-deploy/deploy.log" |
+
+### Configurações de Host
+
+| Opção | Tipo | Descrição | Obrigatório |
+|-------|------|-----------|-------------|
+| protocol | string | Protocolo de deploy | Sim |
+| host | string | Endereço do host | Sim* |
+| user | string | Usuário | Sim* |
+| password | string | Senha | Não |
+| key_path | string | Caminho da chave SSH | Não |
+| port | number | Porta | Não |
+| dest_path | string | Caminho de destino | Sim |
+
+*Não obrigatório para protocolo "local"
+
+## Protocolos Suportados
+
+### SSH/SFTP
+
+```json
+{
+    "protocol": "ssh",
+    "host": "exemplo.com",
+    "user": "deploy",
+    "key_path": "~/.ssh/id_rsa",
+    "port": 22,
+    "dest_path": "/var/www/app"
+}
+```
+
+### FTP
+
+```json
+{
+    "protocol": "ftp",
+    "host": "ftp.exemplo.com",
+    "user": "ftpuser",
+    "password": "senha123",
+    "dest_path": "/public_html"
+}
+```
+
+### Local
+
+```json
+{
+    "protocol": "local",
+    "dest_path": "/mnt/backup"
+}
+```
+
 ## Variáveis de Ambiente
 
-Para autenticação SSH, você pode usar:
-- `NOKTECH_DEPLOY_SSH_KEY`: Caminho da chave SSH
-- `NOKTECH_DEPLOY_PASSWORD`: Senha SSH (se não usar chave) 
+| Variável | Descrição |
+|----------|-----------|
+| NOKTECH_CONFIG | Caminho do arquivo de configuração |
+| NOKTECH_LOG_LEVEL | Nível de log |
+| NOKTECH_IGNORE_FILE | Arquivo de ignore |
+| NOKTECH_SSH_KEY | Caminho da chave SSH |
+| NOKTECH_PASSWORD | Senha para autenticação |
 
-# Diretório de Configuração
+## Exemplos Completos
 
-O NokTech Deploy armazena suas configurações e logs no diretório `~/.noktech-deploy/`.
+### Múltiplos Ambientes
 
-## Localização por Sistema Operacional
-
-### Linux/Mac
-```bash
-# Acessar diretório
-cd ~/.noktech-deploy
-
-# Listar conteúdo (incluindo arquivos ocultos)
-ls -la ~/.noktech-deploy
-
-# Estrutura
-~/.noktech-deploy/
-  ├── config.json     # Configurações
-  └── logs/          # Logs diários
-      └── noktech-deploy-2024-03-20.log
+```json
+{
+    "default_protocol": "ssh",
+    "log_level": "info",
+    "hosts": {
+        "production": {
+            "protocol": "ssh",
+            "host": "exemplo.com",
+            "user": "deploy",
+            "key_path": "~/.ssh/id_rsa",
+            "dest_path": "/var/www/app"
+        },
+        "staging": {
+            "protocol": "ftp",
+            "host": "staging.exemplo.com",
+            "user": "ftpuser",
+            "password": "senha123",
+            "dest_path": "/public_html"
+        },
+        "backup": {
+            "protocol": "local",
+            "dest_path": "/mnt/backup"
+        }
+    }
+}
 ```
 
-### Windows
-```powershell
-# CMD
-cd %USERPROFILE%\.noktech-deploy
+### Configuração com Ignore Patterns
 
-# PowerShell
-cd $env:USERPROFILE\.noktech-deploy
-
-# Localização típica
-C:\Users\SeuUsuario\.noktech-deploy\
+```json
+{
+    "default_protocol": "ssh",
+    "default_ignore_file": "~/.deployignore",
+    "hosts": {
+        "production": {
+            "protocol": "ssh",
+            "host": "exemplo.com",
+            "user": "deploy",
+            "ignore_patterns": [
+                "*.tmp",
+                "*.log",
+                "node_modules/"
+            ]
+        }
+    }
+}
 ```
 
-## Gerenciando Configurações
+## Resolução de Problemas
 
-### Visualizar configuração atual
-```bash
-cat ~/.noktech-deploy/config.json
-```
+### Ordem de Precedência
 
-### Editar configuração
-```bash
-# Linux/Mac
-nano ~/.noktech-deploy/config.json
+1. Argumentos de linha de comando
+2. Variáveis de ambiente
+3. Arquivo de configuração do projeto
+4. Arquivo de configuração global
+5. Valores padrão
 
-# Windows
-notepad %USERPROFILE%\.noktech-deploy\config.json
-```
+### Dicas
 
-### Backup de configurações
-```bash
-# Linux/Mac
-cp ~/.noktech-deploy/config.json ~/.noktech-deploy/config.backup.json
-
-# Windows
-copy %USERPROFILE%\.noktech-deploy\config.json %USERPROFILE%\.noktech-deploy\config.backup.json
-```
-
-## Logs
-
-Os logs são armazenados em `~/.noktech-deploy/logs/` com rotação diária:
-
-```bash
-# Visualizar log atual
-tail -f ~/.noktech-deploy/logs/noktech-deploy-$(date +%Y-%m-%d).log
-
-# Listar todos os logs
-ls -l ~/.noktech-deploy/logs/
-```
-
-## Permissões
-
-### Linux/Mac
-```bash
-# Corrigir permissões
-chmod 700 ~/.noktech-deploy
-chmod 600 ~/.noktech-deploy/config.json
-chmod 700 ~/.noktech-deploy/logs
-```
-
-### Windows
-O diretório é criado com permissões padrão do usuário atual. 
+- Use variáveis de ambiente para informações sensíveis
+- Mantenha senhas fora do controle de versão
+- Use chaves SSH quando possível
+- Configure níveis de log apropriados

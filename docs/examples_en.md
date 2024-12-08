@@ -1,20 +1,20 @@
-# Exemplos de Uso
+# Usage Examples
 
-## Deploy Básico
+## Basic Deployment
 
 ### SSH/SFTP
 
 ```bash
-# Deploy básico via SSH
+# Basic SSH deployment
 noktech-deploy --protocol ssh \
-               --host exemplo.com \
+               --host example.com \
                --user deploy \
                --files-path ./dist \
                --dest-path /var/www/app
 
-# Deploy com chave SSH
+# Deploy with SSH key
 noktech-deploy --protocol ssh \
-               --host exemplo.com \
+               --host example.com \
                --user deploy \
                --key-path ~/.ssh/id_rsa \
                --files-path ./dist \
@@ -24,19 +24,19 @@ noktech-deploy --protocol ssh \
 ### FTP
 
 ```bash
-# Deploy básico via FTP
+# Basic FTP deployment
 noktech-deploy --protocol ftp \
-               --host ftp.exemplo.com \
+               --host ftp.example.com \
                --user ftpuser \
-               --password minhasenha \
+               --password mypassword \
                --files-path ./site \
                --dest-path /public_html
 
-# Deploy com FTP seguro (FTPS)
+# Secure FTP deployment (FTPS)
 noktech-deploy --protocol ftps \
-               --host ftps.exemplo.com \
+               --host ftps.example.com \
                --user ftpuser \
-               --password minhasenha \
+               --password mypassword \
                --files-path ./site \
                --dest-path /public_html
 ```
@@ -44,57 +44,57 @@ noktech-deploy --protocol ftps \
 ### Local
 
 ```bash
-# Cópia local
+# Local copy
 noktech-deploy --protocol local \
-               --files-path ./dados \
+               --files-path ./data \
                --dest-path /mnt/backup
 
-# Cópia para rede local
+# Network share copy
 noktech-deploy --protocol local \
-               --files-path ./projeto \
-               --dest-path //servidor/compartilhado
+               --files-path ./project \
+               --dest-path //server/shared
 ```
 
-## Modo Watch
+## Watch Mode
 
-### Watch Básico
+### Basic Watch
 
 ```bash
-# Observar mudanças e fazer deploy via SSH
+# Watch changes and deploy via SSH
 noktech-deploy --protocol ssh \
-               --host exemplo.com \
+               --host example.com \
                --watch \
                --files-path ./src
 
-# Observar com padrões de ignore personalizados
+# Watch with custom ignore patterns
 noktech-deploy --protocol ssh \
-               --host exemplo.com \
+               --host example.com \
                --watch \
                --ignore-patterns "*.tmp,*.log" \
                --files-path ./src
 ```
 
-### Watch com Eventos Específicos
+### Watch with Specific Events
 
 ```bash
-# Observar apenas criação e modificação
+# Watch only creation and modification
 noktech-deploy --protocol ssh \
-               --host exemplo.com \
+               --host example.com \
                --watch \
                --events create,modify \
                --files-path ./src
 
-# Observar com delay de sincronização
+# Watch with sync delay
 noktech-deploy --protocol ssh \
-               --host exemplo.com \
+               --host example.com \
                --watch \
                --delay 2 \
                --files-path ./src
 ```
 
-## Configurações Avançadas
+## Advanced Configuration
 
-### Usando Arquivo de Configuração
+### Using Configuration File
 
 ```json
 // config.json
@@ -103,14 +103,14 @@ noktech-deploy --protocol ssh \
     "hosts": {
         "production": {
             "protocol": "ssh",
-            "host": "exemplo.com",
+            "host": "example.com",
             "user": "deploy",
             "key_path": "~/.ssh/id_rsa",
             "dest_path": "/var/www/app"
         },
         "staging": {
             "protocol": "ftp",
-            "host": "staging.exemplo.com",
+            "host": "staging.example.com",
             "user": "ftpuser",
             "dest_path": "/public_html"
         }
@@ -119,16 +119,16 @@ noktech-deploy --protocol ssh \
 ```
 
 ```bash
-# Usar configuração predefinida
+# Use predefined configuration
 noktech-deploy --config production --files-path ./dist
 
-# Sobrescrever configurações
+# Override configurations
 noktech-deploy --config staging \
                --dest-path /var/www/temp \
                --files-path ./dist
 ```
 
-### Ignorando Arquivos
+### Ignoring Files
 
 ```plaintext
 # .deployignore
@@ -140,28 +140,28 @@ __pycache__/
 ```
 
 ```bash
-# Usar arquivo de ignore personalizado
+# Use custom ignore file
 noktech-deploy --protocol ssh \
-               --host exemplo.com \
+               --host example.com \
                --ignore-file ./custom-ignore \
                --files-path ./src
 
-# Combinar múltiplos padrões
+# Combine multiple patterns
 noktech-deploy --protocol ssh \
-               --host exemplo.com \
+               --host example.com \
                --ignore-patterns "*.tmp,*.log" \
                --ignore-file .deployignore \
                --files-path ./src
 ```
 
-## Integração com Scripts
+## Script Integration
 
 ### Shell Script
 
 ```bash
 #!/bin/bash
 
-# Deploy para múltiplos ambientes
+# Deploy to multiple environments
 environments=("staging" "production")
 
 for env in "${environments[@]}"; do

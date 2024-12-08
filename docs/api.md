@@ -1,98 +1,141 @@
 # API de Referência
 
-## Deployers
+## Classe DeployClient
 
-### BaseDeployer
-Classe base abstrata para implementações de deployers.
+A classe principal que gerencia todas as operações de deploy.
 
-```python
-class BaseDeployer(ABC):
-    def __init__(self, host: str, user: str, password: str, port: int)
-    
-    @abstractmethod
-    def connect(self) -> None:
-        """Estabelece conexão com o servidor"""
-        
-    @abstractmethod
-    def disconnect(self) -> None:
-        """Encerra conexão com o servidor"""
-        
-    @abstractmethod
-    def deploy_files(self, files_path: str, dest_path: str) -> None:
-        """Faz upload dos arquivos"""
-```
+### Métodos
+
+#### `__init__(self, config_path: Optional[str] = None)`
+Inicializa um novo cliente de deploy.
+- **config_path**: Caminho opcional para arquivo de configuração
+
+#### `async def run(self, args: Args)`
+Executa o processo de deploy com os argumentos fornecidos.
+- **args**: Objeto Args com as configurações do deploy
+
+#### `async def interactive_mode(self)`
+Inicia o modo interativo para configuração do deploy.
+
+#### `async def watch_mode(self)`
+Inicia o modo de observação de mudanças.
+
+## Classe Args
+
+Classe que encapsula os argumentos de linha de comando.
+
+### Atributos
+
+- **protocol**: Protocolo de deploy (`ssh`, `ftp`, `local`)
+- **host**: Host de destino
+- **user**: Usuário para autenticação
+- **password**: Senha para autenticação
+- **key_path**: Caminho para chave SSH
+- **files_path**: Caminho dos arquivos fonte
+- **dest_path**: Caminho de destino
+- **watch**: Flag para modo de observação
+- **ignore_patterns**: Lista de padrões para ignorar
+
+## Protocolos
 
 ### SSHDeployer
-Implementação para deploy via SSH/SFTP.
+
+Implementa deploy via SSH/SFTP.
+
+#### Métodos Principais
 
 ```python
-class SSHDeployer(BaseDeployer):
-    def __init__(self, 
-                 host: str, 
-                 user: str, 
-                 password: str, 
-                 port: int = 22,
-                 key_path: Optional[str] = None)
+async def connect(self)
+async def disconnect(self)
+async def upload_file(self, source: str, dest: str)
+async def delete_file(self, path: str)
 ```
 
 ### FTPDeployer
-Implementação para deploy via FTP.
+
+Implementa deploy via FTP.
+
+#### Métodos Principais
 
 ```python
-class FTPDeployer(BaseDeployer):
-    def __init__(self, 
-                 host: str, 
-                 user: str, 
-                 password: str, 
-                 port: int = 21)
+async def connect(self)
+async def disconnect(self)
+async def upload_file(self, source: str, dest: str)
+async def delete_file(self, path: str)
 ```
 
-## Core
+### LocalDeployer
 
-### FileManager
-Gerencia operações com arquivos.
+Implementa deploy local.
+
+#### Métodos Principais
 
 ```python
-class FileManager:
-    def collect_files(self, base_path: str) -> List[Tuple[str, str]]:
-        """Coleta arquivos para deploy"""
-        
-    def watch_directory(self, path: str, callback: Callable) -> None:
-        """Observa mudanças no diretório"""
+async def connect(self)
+async def disconnect(self)
+async def copy_file(self, source: str, dest: str)
+async def delete_file(self, path: str)
 ```
 
-### IgnoreRules
-Processa regras de ignore.
+## Sistema de Eventos
+
+### Classe FileEvent
+
+Representa um evento de mudança de arquivo.
+
+#### Atributos
+
+- **event_type**: Tipo do evento (`created`, `modified`, `deleted`)
+- **src_path**: Caminho do arquivo fonte
+- **is_directory**: Flag indicando se é diretório
+
+## Logging
+
+### Classe Logger
+
+Gerencia o sistema de logging.
+
+#### Métodos
 
 ```python
-class IgnoreRules:
-    def __init__(self, 
-                 rules: Optional[List[str]] = None,
-                 ignore_file: Optional[str] = None)
-                 
-    def should_ignore(self, path: str) -> bool:
-        """Verifica se um arquivo deve ser ignorado"""
+def info(self, message: str)
+def error(self, message: str)
+def debug(self, message: str)
+def warning(self, message: str)
 ```
 
-## Utilitários
+## Exemplos de Uso
 
-### Logger
-Sistema de logging.
+### Deploy Básico
 
 ```python
-class Logger:
-    def info(self, message: str) -> None
-    def error(self, message: str) -> None
-    def warning(self, message: str) -> None
-    def debug(self, message: str) -> None
+from noktech_deploy import DeployClient, Args
+
+async def main():
+    client = DeployClient()
+    args = Args(
+        protocol="ssh",
+        host="exemplo.com",
+        user="deploy",
+        files_path="./dist",
+        dest_path="/var/www/app"
+    )
+    await client.run(args)
 ```
 
-### Config
-Gerenciamento de configurações.
+### Modo Watch Customizado
 
 ```python
-class Config:
-    def get(self, key: str, default: Any = None) -> Any
-    def set(self, key: str, value: Any) -> None
-    def delete(self, key: str) -> None
+from noktech_deploy import DeployClient, Args
+
+async def main():
+    client = DeployClient()
+    args = Args(
+        protocol="local",
+        files_path="./src",
+        dest_path="./dist",
+        watch=True,
+        ignore_patterns=["*.tmp", "*.log"]
+    )
+    await client.watch_mode(args)
 ``` 

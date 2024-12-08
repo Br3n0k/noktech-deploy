@@ -22,6 +22,7 @@
     "input.key_path": "Caminho da chave SSH:",
     "input.port": "Porta ({}):",
     "input.watch": "Ativar modo de observação? (s/n):",
+    "input.overwrite": "Sobrescrever arquivos existentes?",
     
     "ignore.config": "Configuração de arquivos ignorados",
     "ignore.use_git": "Usar .gitignore?",
@@ -35,5 +36,47 @@
     
     "success.connected": "Conectado com sucesso",
     "success.deployed": "Deploy concluído com sucesso",
-    "success.watching": "Modo de observação ativado. Pressione Ctrl+C para sair"
+    "success.watching": "Modo de observação ativado. Pressione Ctrl+C para sair",
+    "info.skipping_file": "Pulando arquivo existente: {}",
+    
+    "deploy.start": "Iniciando deploy...",
+    "deploy.complete": "Deploy concluído com sucesso!",
+    "deploy.error": "Erro durante o deploy: {}",
+    
+    "watch.start": "Iniciando modo de observação...",
+    "watch.file_created": "Arquivo criado: {}",
+    "watch.file_modified": "Arquivo modificado: {}",
+    "watch.file_deleted": "Arquivo deletado: {}",
+    "watch.error": "Erro ao processar mudança: {}",
+    
+    "connection.connecting": "Conectando a {}...",
+    "connection.connected": "Conectado com sucesso",
+    "connection.error": "Erro de conexão: {}",
+    "connection.disconnected": "Desconectado do servidor",
+    
+    "ignore.loading": "Carregando regras de ignore...",
+    "ignore.using_git": "Usando regras do .gitignore",
+    "ignore.using_deploy": "Usando regras do .deployignore",
+    "ignore.custom": "Usando regras personalizadas",
+    
+    "config.loading": "Carregando configurações...",
+    "config.saved": "Configurações salvas",
+    "config.error": "Erro ao carregar configurações: {}",
+    
+    "cli.missing_args": "Argumentos obrigatórios faltando",
+    "cli.invalid_protocol": "Protocolo inválido: {}",
+    "cli.invalid_port": "Porta inválida: {}",
+    "local.copying": "Copiando arquivos de {} para {}",
+    "local.copied": "Arquivos copiados com sucesso",
+    "local.error": "Erro ao copiar arquivos: {}",
+    "cli.enter_protocol": "Digite o protocolo",
+    "cli.enter_host": "Digite o host",
+    "cli.enter_user": "Digite o usuário",
+    "cli.enter_password": "Digite a senha",
+    "cli.enter_source_path": "Digite o caminho de origem",
+    "cli.enter_dest_path": "Digite o caminho de destino",
+    "cli.watch_mode": "Ativar modo de observação",
+    "cli.optional": "opcional",
+    "cli.error": "Erro",
+    "cli.missing_protocol": "Protocolo não especificado"
 } 
