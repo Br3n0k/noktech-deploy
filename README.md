@@ -5,6 +5,11 @@
 </p>
 
 Um cliente de deploy avançado e flexível com suporte a múltiplos protocolos e observação de mudanças em tempo real.
+Tenho certeza que você já passou por situações onde precisou fazer deploy de arquivos para um servidor, em diferentes cenários e IDEs,
+e acabou se deparando com problemas como: ter que utilizar diferentes programas ou scripts para cada situação, ou ter que configurar
+manualmente cada host, ou ainda, perder tempo configurando o ignore de arquivos. O NokTech Deploy veio para resolver esses problemas!
+Com ele, você pode fazer deploy de arquivos para um servidor de forma fácil e rápida, com suporte a múltiplos protocolos e observação de mudanças em tempo real.
+E o melhor de tudo, ele é open source!
 
 ## 📋 Características
 
