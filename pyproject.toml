@@ -1,0 +1,41 @@
+[tool.poetry]
+name = "noktech-deploy"
+version = "0.1.0"
+description = "Cliente de deploy avançado com suporte a múltiplos protocolos e observação de mudanças em tempo real"
+authors = ["Brendown Ferreira <br3n0k@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/Br3n0k/noktech-deploy"
+repository = "https://github.com/Br3n0k/noktech-deploy"
+documentation = "https://github.com/Br3n0k/noktech-deploy/docs"
+keywords = ["deploy", "automation", "file-sync", "ssh", "ftp"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Build Tools",
+]
+packages = [
+    { include = "src" }
+]
+include = [
+    "assets/**/*"
+]
+
+[tool.poetry.build]
+generate-setup-py = true
+script = "build.py"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+paramiko = "^2.8.1"
+watchdog = "^2.1.9"
+typing-extensions = "^4.4.0"
+
+[tool.poetry.scripts]
+noktech-deploy = "src.deploy_client:main"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api" 
