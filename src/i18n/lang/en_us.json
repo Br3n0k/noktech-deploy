@@ -1,0 +1,39 @@
+{
+    "app.name": "NokTech Deploy",
+    "app.description": "Advanced deployment client with multiple protocols support",
+    "app.version": "Version",
+    "app.author": "Author",
+    "app.repo": "Repository",
+    
+    "mode.interactive": "Interactive Mode",
+    "mode.watch": "Watch Mode",
+    
+    "protocol.select": "Choose protocol:",
+    "protocol.ssh": "SSH/SFTP",
+    "protocol.ftp": "FTP",
+    "protocol.local": "Local",
+    
+    "input.choice": "Option",
+    "input.source_path": "Source files path:",
+    "input.dest_path": "Destination path:",
+    "input.host": "Host:",
+    "input.user": "Username:",
+    "input.password": "Password:",
+    "input.key_path": "SSH key path:",
+    "input.port": "Port ({}):",
+    "input.watch": "Enable watch mode? (y/n):",
+    
+    "ignore.config": "Ignored files configuration",
+    "ignore.use_git": "Use .gitignore?",
+    "ignore.use_custom": "Add custom patterns?",
+    "ignore.patterns": "Enter patterns (one per line, empty Enter to finish)",
+    
+    "error.invalid_option": "Invalid option!",
+    "error.connection": "Connection error: {}",
+    "error.deploy": "Deploy error: {}",
+    "error.cancelled": "Operation cancelled by user",
+    
+    "success.connected": "Connected successfully",
+    "success.deployed": "Deploy completed successfully",
+    "success.watching": "Watch mode enabled. Press Ctrl+C to exit"
+} 

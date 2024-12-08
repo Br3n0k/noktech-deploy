@@ -20,6 +20,7 @@ from src.core.watcher import DirectoryWatcher
 from src.utils.logger import Logger
 from src.utils.config import Config
 from src.version import VERSION
+from .i18n import I18n
 
 class DeployClient:
     def __init__(self):
@@ -27,6 +28,7 @@ class DeployClient:
         self.config = Config()
         self.deployer = None
         self.file_manager = None
+        self.i18n = I18n()
 
     def setup_deployer(self, args):
         """Configura o deployer baseado nos argumentos"""
@@ -164,36 +166,44 @@ class DeployClient:
         ██║ ╚████║╚██████╔╝██║  ██╗██████╔╝███████╗██║     ███████╗╚██████╔╝   ██║   
         ╚═╝  ╚═══╝ ╚═════╝ ╚═╝  ╚═╝╚═════╝ ╚══════╝╚═╝     ╚══════╝ ╚═════╝    ╚═╝   
         """
-        info = """
-        Versão: 0.1.0
-        Autor: Brendown Ferreira (Br3n0k)
-        GitHub: https://github.com/Br3n0k/noktech-deploy
+        info = f"""
+        {self.i18n.get('app.version')}: 0.1.0
+        {self.i18n.get('app.author')}: Brendown Ferreira
+        {self.i18n.get('app.repo')}: https://github.com/Br3n0k/noktech-deploy
         """
         print(banner)
         print(info)
 
     def interactive_mode(self) -> None:
-        """Modo interativo quando não há argumentos"""
         self.show_banner()
-        print("\n=== Modo Interativo ===\n")
+        print(f"\n=== {self.i18n.get('mode.interactive')} ===\n")
         
         # Protocolo
-        print("Escolha o protocolo:")
-        print("1. SSH/SFTP")
-        print("2. FTP")
-        print("3. Local (Pastas Locais ou em rede)")
-        protocol_choice = input("Opção (1-3): ").strip()
+        print(self.i18n.get('protocol.select'))
+        print(f"1. {self.i18n.get('protocol.ssh')}")
+        print(f"2. {self.i18n.get('protocol.ftp')}")
+        print(f"3. {self.i18n.get('protocol.local')}")
+        protocol_choice = input(f"{self.i18n.get('input.choice')} (1-3): ").strip()
         
         protocol_map = {'1': 'ssh', '2': 'ftp', '3': 'local'}
         protocol = protocol_map.get(protocol_choice)
         
         if not protocol:
-            print("Opção inválida!")
+            print(self.i18n.get('error.invalid_option'))
             return
         
-        # Informações comuns
-        files_path = input("\nCaminho dos arquivos fonte: ").strip()
-        dest_path = input("Caminho de destino: ").strip()
+        # Caminhos
+        files_path = input(f"\n{self.i18n.get('input.source_path')} ").strip()
+        dest_path = input(f"{self.i18n.get('input.dest_path')} ").strip()
+        
+        # Configuração de ignore
+        print(f"\n{self.i18n.get('ignore.config')}:")
+        use_gitignore = input(f"{self.i18n.get('ignore.use_git')} (s/n): ").lower().startswith(
+            's' if self.i18n.current_lang == 'pt_br' else 'y'
+        )
+        use_custom = input(f"{self.i18n.get('ignore.use_custom')} (s/n): ").lower().startswith(
+            's' if self.i18n.current_lang == 'pt_br' else 'y'
+        )
         
         # Criar instância de Args em vez de usar type()
         args = Args()
@@ -224,9 +234,6 @@ class DeployClient:
         
         # Pergunta sobre arquivos a ignorar
         print("\nConfiguração de arquivos ignorados:")
-        use_gitignore = input("Usar .gitignore? (s/n): ").lower().startswith('s')
-        use_custom = input("Adicionar padrões personalizados? (s/n): ").lower().startswith('s')
-        
         args.ignore_file = '.gitignore' if use_gitignore else None
         if use_custom:
             print("Digite os padrões (um por linha, Enter vazio para terminar):")

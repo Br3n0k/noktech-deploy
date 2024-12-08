@@ -1,3 +1,8 @@
+<div align="right">
+    <a href="README.md">🇧🇷 Português</a> &nbsp;&nbsp;|&nbsp;&nbsp;
+    <a href="README_en.md">🇺🇸 English</a>
+</div>
+
 # NokTech Deploy
 
 <p align="center">
@@ -20,6 +25,7 @@ E o melhor de tudo, ele é open source!
 - **Observação em Tempo Real**
 - **Sistema de Ignore Avançado**
 - **Interface Interativa**
+- **Suporte Multi-idioma**
 - **Logging Completo**
 
 ## 🚀 Instalação
@@ -113,13 +119,6 @@ noktech-deploy --ignore-patterns "*.temp" "logs/*" \
                # ... outras opções ...
 ```
 
-#### Padrões Suportados
-- `file.txt` - Arquivo específico
-- `*.ext` - Por extensão
-- `dir/` - Diretório completo
-- `dir/*.txt` - Arquivos específicos em diretório
-- `!important.log` - Exceção (não ignora)
-
 [Documentação completa de ignore](docs/ignore_rules.md)
 
 ### Configurações Persistentes
@@ -139,8 +138,6 @@ O NokTech Deploy armazena configurações em `~/.noktech-deploy/config.json`:
 }
 ```
 
-[Documentação de configuração](docs/configuration.md)
-
 ## 📚 Documentação
 
 - [API de Referência](docs/api.md)
@@ -152,9 +149,9 @@ O NokTech Deploy armazena configurações em `~/.noktech-deploy/config.json`:
 ## 🤝 Contribuindo
 
 1. Fork o projeto
-2. Crie sua branch (`git checkout -b feature/AmazingFeature`)
+2. Crie sua branch (`git checkout -b feature/NovaFuncionalidade`)
 3. Commit suas mudanças (`git commit -m 'Add: nova funcionalidade'`)
-4. Push para a branch (`git push origin feature/AmazingFeature`)
+4. Push para a branch (`git push origin feature/NovaFuncionalidade`)
 5. Abra um Pull Request
 
 ## 📄 Licença

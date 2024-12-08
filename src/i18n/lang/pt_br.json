@@ -1,0 +1,39 @@
+{
+    "app.name": "NokTech Deploy",
+    "app.description": "Cliente de deploy avançado com suporte a múltiplos protocolos",
+    "app.version": "Versão",
+    "app.author": "Autor",
+    "app.repo": "Repositório",
+    
+    "mode.interactive": "Modo Interativo",
+    "mode.watch": "Modo de Observação",
+    
+    "protocol.select": "Escolha o protocolo:",
+    "protocol.ssh": "SSH/SFTP",
+    "protocol.ftp": "FTP",
+    "protocol.local": "Local",
+    
+    "input.choice": "Opção",
+    "input.source_path": "Caminho dos arquivos fonte:",
+    "input.dest_path": "Caminho de destino:",
+    "input.host": "Host:",
+    "input.user": "Usuário:",
+    "input.password": "Senha:",
+    "input.key_path": "Caminho da chave SSH:",
+    "input.port": "Porta ({}):",
+    "input.watch": "Ativar modo de observação? (s/n):",
+    
+    "ignore.config": "Configuração de arquivos ignorados",
+    "ignore.use_git": "Usar .gitignore?",
+    "ignore.use_custom": "Adicionar padrões personalizados?",
+    "ignore.patterns": "Digite os padrões (um por linha, Enter vazio para terminar)",
+    
+    "error.invalid_option": "Opção inválida!",
+    "error.connection": "Erro de conexão: {}",
+    "error.deploy": "Erro no deploy: {}",
+    "error.cancelled": "Operação cancelada pelo usuário",
+    
+    "success.connected": "Conectado com sucesso",
+    "success.deployed": "Deploy concluído com sucesso",
+    "success.watching": "Modo de observação ativado. Pressione Ctrl+C para sair"
+} 
