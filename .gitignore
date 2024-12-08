@@ -43,3 +43,4 @@ config.local.json
 .coverage
 htmlcov/
 .pytest_cache/ 
+*.spec

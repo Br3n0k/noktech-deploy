@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+from typing import Optional
+from ..core.ignore_rules import IgnoreRules
 
 class BaseDeployer(ABC):
     def __init__(self, host: str, user: str, password: str, port: int):
@@ -6,6 +8,7 @@ class BaseDeployer(ABC):
         self.user = user 
         self.password = password
         self.port = port
+        self.ignore_rules: Optional[IgnoreRules] = None
 
     @abstractmethod
     def connect(self) -> None:

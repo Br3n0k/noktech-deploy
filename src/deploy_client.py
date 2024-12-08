@@ -2,8 +2,9 @@
 import warnings
 import argparse
 import sys
-from typing import Optional
+from typing import Optional, List
 from cryptography.utils import CryptographyDeprecationWarning
+import os
 
 # Suprimir avisos de depreciação do Paramiko
 warnings.filterwarnings(
@@ -72,10 +73,11 @@ class DeployClient:
             return
 
         # Configura regras de ignore
-        ignore_rules = IgnoreRules(
-            ignore_file=args.ignore_file,
-            rules=args.ignore_patterns
-        )
+        ignore_rules = self.setup_ignore_rules(args)
+        
+        # Passa as regras para o deployer
+        if self.deployer:
+            self.deployer.ignore_rules = ignore_rules
 
         # Configura deployer
         self.setup_deployer(args)
@@ -152,9 +154,194 @@ class DeployClient:
 
         return parser
 
+    def show_banner(self):
+        """Exibe o banner ASCII do NokDeploy"""
+        banner = """
+        ███╗   ██╗ ██████╗ ██╗  ██╗██████╗ ███████╗██████╗ ██╗      ██████╗ ██╗   ██╗
+        ████╗  ██║██╔═══██╗██║ ██╔╝██╔══██╗██╔════╝██╔══██╗██║     ██╔═══██╗╚██╗ ██╔╝
+        ██╔██╗ ██║██║   ██║█████╔╝ ██║  ██║█████╗  ██████╔╝██║     ██║   ██║ ╚████╔╝ 
+        ██║╚██╗██║██║   ██║██╔═██╗ ██║  ██║██╔══╝  ██╔═══╝ ██║     ██║   ██║  ╚██╔╝  
+        ██║ ╚████║╚██████╔╝██║  ██╗██████╔╝███████╗██║     ███████╗╚██████╔╝   ██║   
+        ╚═╝  ╚═══╝ ╚═════╝ ╚═╝  ╚═╝╚═════╝ ╚══════╝╚═╝     ╚══════╝ ╚═════╝    ╚═╝   
+        """
+        info = """
+        Versão: 0.1.0
+        Autor: Brendown Ferreira (Br3n0k)
+        GitHub: https://github.com/Br3n0k/noktech-deploy
+        """
+        print(banner)
+        print(info)
+
+    def interactive_mode(self) -> None:
+        """Modo interativo quando não há argumentos"""
+        self.show_banner()
+        print("\n=== Modo Interativo ===\n")
+        
+        # Protocolo
+        print("Escolha o protocolo:")
+        print("1. SSH/SFTP")
+        print("2. FTP")
+        print("3. Local (Pastas Locais ou em rede)")
+        protocol_choice = input("Opção (1-3): ").strip()
+        
+        protocol_map = {'1': 'ssh', '2': 'ftp', '3': 'local'}
+        protocol = protocol_map.get(protocol_choice)
+        
+        if not protocol:
+            print("Opção inválida!")
+            return
+        
+        # Informações comuns
+        files_path = input("\nCaminho dos arquivos fonte: ").strip()
+        dest_path = input("Caminho de destino: ").strip()
+        
+        # Criar instância de Args em vez de usar type()
+        args = Args()
+        args.protocol = protocol
+        args.files_path = files_path
+        args.dest_path = dest_path
+        
+        if protocol in ['ssh', 'ftp']:
+            args.host = input("Host: ").strip()
+            args.user = input("Usuário: ").strip()
+            
+            if protocol == 'ssh':
+                use_key = input("Usar chave SSH? (s/n): ").lower().startswith('s')
+                if use_key:
+                    args.key_path = input("Caminho da chave SSH: ").strip()
+                    args.password = None
+                else:
+                    args.password = input("Senha: ").strip()
+                    args.key_path = None
+            else:
+                args.password = input("Senha: ").strip()
+            
+            port_input = input(f"Porta ({22 if protocol == 'ssh' else 21}): ").strip()
+            args.port = int(port_input) if port_input else (22 if protocol == 'ssh' else 21)
+        
+        # Modo watch
+        args.watch = input("\nAtivar modo de observação? (s/n): ").lower().startswith('s')
+        
+        # Pergunta sobre arquivos a ignorar
+        print("\nConfiguração de arquivos ignorados:")
+        use_gitignore = input("Usar .gitignore? (s/n): ").lower().startswith('s')
+        use_custom = input("Adicionar padrões personalizados? (s/n): ").lower().startswith('s')
+        
+        args.ignore_file = '.gitignore' if use_gitignore else None
+        if use_custom:
+            print("Digite os padrões (um por linha, Enter vazio para terminar):")
+            patterns = []
+            while True:
+                pattern = input().strip()
+                if not pattern:
+                    break
+                patterns.append(pattern)
+            args.ignore_patterns = patterns
+        
+        print("\nIniciando deploy...\n")
+        
+        try:
+            self.setup_deployer(args)
+            if not self.deployer:
+                raise ValueError("Deployer não configurado")
+            
+            self.deployer.connect()
+            self.deployer.deploy_files(args.files_path, args.dest_path)
+            
+            if args.watch:
+                print("\nModo de observação ativado. Pressione Ctrl+C para sair.")
+                self.watch_directory(args)
+            
+            print("\nDeploy concluído com sucesso!")
+            
+        except Exception as e:
+            print(f"\nErro: {str(e)}")
+        finally:
+            if self.deployer:
+                self.deployer.disconnect()
+
+    def watch_directory(self, args):
+        """Inicia o modo de observação"""
+        watcher = DirectoryWatcher(
+            args.files_path,
+            self.handle_file_change,
+            ignore_rules=None,  # Você pode adicionar regras de ignore aqui
+            logger=self.logger
+        )
+        watcher.start()
+
+    def setup_ignore_rules(self, args) -> IgnoreRules:
+        """Configura regras de ignore para o deploy"""
+        # Arquivos de ignore padrão
+        ignore_files = [
+            '.gitignore',
+            '.deployignore'
+        ]
+        
+        # Padrões padrão
+        default_patterns = [
+            '.git/',
+            '__pycache__/',
+            '*.pyc',
+            '*.pyo',
+            '*.pyd',
+            '.Python',
+            'env/',
+            'venv/',
+            '.env',
+            '.venv',
+            'build/',
+            'dist/',
+            '*.egg-info/',
+            '.coverage',
+            'htmlcov/',
+            '.pytest_cache/',
+            '.idea/',
+            '.vscode/',
+            'node_modules/',
+            '.DS_Store'
+        ]
+        
+        # Adiciona padrões da linha de comando
+        if args.ignore_patterns:
+            default_patterns.extend(args.ignore_patterns)
+        
+        # Cria regras de ignore
+        rules = IgnoreRules(
+            rules=default_patterns,
+            ignore_file=args.ignore_file or next((f for f in ignore_files if os.path.exists(f)), None)
+        )
+        
+        return rules
+
+class Args:
+    def __init__(self):
+        self.protocol: str = ''
+        self.host: str = ''
+        self.user: str = ''
+        self.password: Optional[str] = None
+        self.key_path: Optional[str] = None
+        self.port: int = 0
+        self.files_path: str = ''
+        self.dest_path: str = ''
+        self.watch: bool = False
+        self.ignore_patterns: List[str] = []
+        self.ignore_file: Optional[str] = None
+
 def main():
-    client = DeployClient()
-    client.run()
+    try:
+        client = DeployClient()
+        
+        if len(sys.argv) == 1:  # Sem argumentos
+            client.interactive_mode()
+        else:
+            client.run()
+            
+    except KeyboardInterrupt:
+        print("\nOperação cancelada pelo usuário.")
+    except Exception as e:
+        print(f"\nErro: {str(e)}")
+        sys.exit(1)
 
 if __name__ == '__main__':
     main() 
