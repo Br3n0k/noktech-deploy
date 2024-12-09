@@ -1,50 +1,66 @@
 import os
 from typing import List, Tuple, Optional
-from pathlib import Path
 from .ignore_rules import IgnoreRules
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import time
+import asyncio
+
 
 class FileChangeHandler(FileSystemEventHandler):
-    def __init__(self, callback, ignore_rules: Optional[IgnoreRules] = None):
+    def __init__(self, callback, ignore_rules=None):
         self.callback = callback
         self.ignore_rules = ignore_rules
+        self.loop = None
 
-    def on_modified(self, event):
-        if not event.is_directory and not self._should_ignore(event.src_path):
-            self.callback(event.src_path, 'modified')
+    def _get_loop(self):
+        if self.loop is None:
+            try:
+                self.loop = asyncio.get_running_loop()
+            except RuntimeError:
+                self.loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(self.loop)
+        return self.loop
+
+    async def _handle_event(self, event, event_type):
+        if not event.is_directory:
+            rel_path = os.path.relpath(event.src_path)
+            if not self.ignore_rules or not self.ignore_rules.should_ignore(rel_path):
+                await self.callback(event.src_path, event_type)
 
     def on_created(self, event):
-        if not event.is_directory and not self._should_ignore(event.src_path):
-            self.callback(event.src_path, 'created')
+        loop = self._get_loop()
+        loop.create_task(self._handle_event(event, "created"))
+
+    def on_modified(self, event):
+        loop = self._get_loop()
+        loop.create_task(self._handle_event(event, "modified"))
 
     def on_deleted(self, event):
-        if not event.is_directory and not self._should_ignore(event.src_path):
-            self.callback(event.src_path, 'deleted')
+        loop = self._get_loop()
+        loop.create_task(self._handle_event(event, "deleted"))
 
-    def _should_ignore(self, path: str) -> bool:
-        return bool(self.ignore_rules and self.ignore_rules.should_ignore(path))
 
 class FileManager:
-    def __init__(self, base_path: Optional[str] = None, ignore_rules: Optional[IgnoreRules] = None):
+    def __init__(
+        self,
+        base_path: Optional[str] = None,
+        ignore_rules: Optional[IgnoreRules] = None,
+    ):
         self.ignore_rules = ignore_rules
         self.observer = None
         self.base_path = os.path.abspath(base_path) if base_path else None
 
-    def collect_files(self, base_path: str) -> List[Tuple[str, str]]:
-        """Coleta arquivos para deploy respeitando regras de ignore"""
-        self.base_path = os.path.abspath(base_path)
-        files_to_deploy = []
-        
-        for root, _, files in os.walk(self.base_path):
-            for file in files:
-                full_path = os.path.join(root, file)
-                if not self.ignore_rules or not self.ignore_rules.should_ignore(full_path):
-                    relative_path = os.path.relpath(full_path, self.base_path)
-                    files_to_deploy.append((full_path, relative_path))
-                    
-        return files_to_deploy
+    def collect_files(self, path: str) -> List[Tuple[str, str]]:
+        files = []
+        for root, _, filenames in os.walk(path):
+            for filename in filenames:
+                abs_path = os.path.join(root, filename)
+                rel_path = os.path.relpath(abs_path, path)
+                # Normaliza separadores para forward slash
+                rel_path = rel_path.replace(os.sep, "/")
+                files.append((abs_path, rel_path))
+        return files
 
     def watch_directory(self, path: str, callback) -> None:
         """Observa mudanças no diretório"""
@@ -52,7 +68,7 @@ class FileManager:
         handler = FileChangeHandler(callback, self.ignore_rules)
         self.observer.schedule(handler, path, recursive=True)
         self.observer.start()
-        
+
         try:
             while True:
                 time.sleep(1)
@@ -63,4 +79,4 @@ class FileManager:
         """Para de observar o diretório"""
         if self.observer:
             self.observer.stop()
-            self.observer.join() 
+            self.observer.join()

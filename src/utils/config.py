@@ -1,50 +1,44 @@
-import os
 import json
-from typing import Dict, Any, Optional
+from pathlib import Path
+
 
 class Config:
-    def __init__(self, config_file: Optional[str] = None):
+    def __init__(self, config_file: str = None):
         self.config_file = config_file or self.get_default_config_file()
-        self.config: Dict[str, Any] = {}
-        self.load()
+        self.data = {}
+        self.load_config()
 
     @staticmethod
     def get_default_config_file() -> str:
-        """Retorna o caminho padrão para o arquivo de configuração"""
-        config_dir = os.path.expanduser('~/.noktech-deploy')
-        if not os.path.exists(config_dir):
-            os.makedirs(config_dir)
-        return os.path.join(config_dir, 'config.json')
+        """Retorna caminho padrão do arquivo de configuração"""
+        return str(Path.home() / ".noktech-deploy" / "config.json")
 
-    def load(self) -> None:
+    def load_config(self):
         """Carrega configurações do arquivo"""
-        if os.path.exists(self.config_file):
-            try:
-                with open(self.config_file, 'r') as f:
-                    self.config = json.load(f)
-            except Exception as e:
-                print(f"Erro ao carregar configurações: {str(e)}")
-                self.config = {}
-
-    def save(self) -> None:
-        """Salva configurações no arquivo"""
         try:
-            with open(self.config_file, 'w') as f:
-                json.dump(self.config, f, indent=4)
-        except Exception as e:
-            print(f"Erro ao salvar configurações: {str(e)}")
+            with open(self.config_file, "r", encoding="utf-8") as f:
+                self.data = json.load(f)
+        except FileNotFoundError:
+            self.data = {}
+        except json.JSONDecodeError:
+            self.data = {}
 
-    def get(self, key: str, default: Any = None) -> Any:
-        """Obtém um valor de configuração"""
-        return self.config.get(key, default)
+    def save_config(self):
+        """Salva configurações no arquivo"""
+        Path(self.config_file).parent.mkdir(parents=True, exist_ok=True)
+        with open(self.config_file, "w", encoding="utf-8") as f:
+            json.dump(self.data, f, indent=4)
 
-    def set(self, key: str, value: Any) -> None:
-        """Define um valor de configuração"""
-        self.config[key] = value
-        self.save()
+    def get(self, key: str, default=None):
+        """Obtém valor da configuração"""
+        return self.data.get(key, default)
 
-    def delete(self, key: str) -> None:
-        """Remove uma configuração"""
-        if key in self.config:
-            del self.config[key]
-            self.save() 
+    def set(self, key: str, value):
+        """Define valor da configuração"""
+        self.data[key] = value
+        self.save_config()
+
+    def delete(self, key):
+        if key in self.data:
+            del self.data[key]
+            self.save_config()

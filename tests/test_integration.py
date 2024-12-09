@@ -1,89 +1,94 @@
 import pytest
 import os
-import tempfile
-import threading
-import time
 import shutil
+import asyncio
 from src.deploy_client import DeployClient
 from src.core.watcher import DirectoryWatcher
-from src.deployers import LocalDeployer
+
 
 class TestIntegration:
     @pytest.fixture
     def setup_dirs(self):
-        """Prepara diretórios para teste de integração"""
-        source = tempfile.mkdtemp()
-        dest = tempfile.mkdtemp()
-        
-        # Cria estrutura inicial
-        os.makedirs(os.path.join(source, 'src/components'))
-        os.makedirs(os.path.join(source, 'public'))
-        
-        with open(os.path.join(source, 'src/index.js'), 'w') as f:
-            f.write('console.log("test")')
-            
-        yield source, dest
-        
-        # Cleanup
-        for d in [source, dest]:
+        """Configura diretórios para teste"""
+        test_dirs = ["test_src", "test_dest"]
+        for d in test_dirs:
             try:
-                shutil.rmtree(d)
-            except:
-                pass
+                os.makedirs(d, exist_ok=True)
+            except (OSError, PermissionError) as e:
+                pytest.fail(f"Falha ao criar diretório {d}: {e}")
+        return test_dirs
 
-    def test_full_deploy_cycle(self, setup_dirs):
+    @pytest.mark.asyncio
+    async def test_full_deploy_cycle(self, setup_dirs):
         """Testa ciclo completo de deploy"""
-        source_dir, dest_dir = setup_dirs
-        
-        # Configura cliente
-        client = DeployClient()
-        args = type('Args', (), {
-            'protocol': 'local',
-            'dest_path': dest_dir,
-            'files_path': source_dir,
-            'watch': False,
-            'ignore_patterns': ['*.log']
-        })()
-        
-        # Executa deploy
-        client.setup_deployer(args)
-        if not client.deployer:
-            raise ValueError("Deployer não configurado")
-            
-        client.deployer.deploy_files(source_dir, dest_dir)
-        
-        # Verifica resultado
-        assert os.path.exists(os.path.join(dest_dir, 'src/index.js'))
-        
-    def test_watch_mode(self, setup_dirs):
+        try:
+            source_dir, dest_dir = setup_dirs
+
+            # Cria estrutura de arquivos para teste
+            src_dir = os.path.join(source_dir, "src")
+            os.makedirs(src_dir, exist_ok=True)
+            with open(os.path.join(src_dir, "index.js"), "w") as f:
+                f.write('console.log("test")')
+
+            client = DeployClient()
+            args = type(
+                "Args",
+                (),
+                {
+                    "protocol": "local",
+                    "dest_path": dest_dir,
+                    "files_path": source_dir,
+                    "watch": False,
+                    "ignore_patterns": ["*.log"],
+                },
+            )()
+
+            await client.setup_deployer(args)
+            assert client.deployer is not None
+
+            await client.deployer.deploy_files(source_dir, dest_dir)
+            assert os.path.exists(os.path.join(dest_dir, "src", "index.js"))
+        finally:
+            self.cleanup_dirs(setup_dirs)
+
+    @pytest.mark.asyncio
+    async def test_watch_mode(self, setup_dirs):
         """Testa modo de observação"""
         source_dir, dest_dir = setup_dirs
         events_processed = []
-        
-        def handle_event(path, event_type):
-            events_processed.append((path, event_type))
-            
+
+        async def handle_event(path, event_type):
+            normalized_path = os.path.normpath(path)
+            events_processed.append((normalized_path, event_type))
+
         # Inicia observador
-        watcher = DirectoryWatcher(
-            source_dir,
-            handle_event,
-            None  # sem regras de ignore
-        )
-        
-        # Executa em thread separada
-        thread = threading.Thread(target=watcher.start)
-        thread.daemon = True
-        thread.start()
-        
+        watcher = DirectoryWatcher(source_dir, handle_event)
+        watch_task = asyncio.create_task(watcher.start())
+
+        await asyncio.sleep(1)  # Aumentado tempo de espera
+
         # Cria novo arquivo
-        test_file = os.path.join(source_dir, 'src/test.js')
-        with open(test_file, 'w') as f:
+        src_dir = os.path.join(source_dir, "src")
+        os.makedirs(src_dir, exist_ok=True)
+        test_file = os.path.join(src_dir, "test.js")
+        test_file = os.path.normpath(test_file)
+
+        with open(test_file, "w") as f:
             f.write('console.log("new file")')
-            
-        # Aguarda processamento
-        time.sleep(1)
+
+        await asyncio.sleep(2)  # Aumentado tempo de espera
         watcher.stop()
-        
-        # Verifica eventos
+        await watch_task
+
         assert len(events_processed) > 0
-        assert any(test_file in path for path, _ in events_processed) 
+        assert any(
+            test_file == path for path, _ in events_processed
+        ), f"Expected {test_file} in {events_processed}"
+
+    def cleanup_dirs(self, dirs):
+        """Limpa diretórios de teste"""
+        for d in dirs:
+            try:
+                shutil.rmtree(d)
+            except (FileNotFoundError, PermissionError, OSError) as e:
+                print(f"Erro ao remover diretório {d}: {e}")

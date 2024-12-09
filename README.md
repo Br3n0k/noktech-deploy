@@ -3,122 +3,347 @@
     <a href="README_en.md">🇺🇸 English</a>
 </div>
 
-# NokTech Deploy
-
-<p align="center">
+<div align="center">
   <img src="src/assets/logo.webp" alt="NokTech Deploy Logo" width="200"/>
-</p>
+  <h1>NokTech Deploy</h1>
+  <p><strong>Cliente de deploy avançado com suporte a múltiplos protocolos</strong></p>
+  
+  ![Version](https://img.shields.io/badge/version-0.1.2-blue.svg)
+  ![License](https://img.shields.io/badge/license-MIT-green.svg)
+  ![Python](https://img.shields.io/badge/python-3.8.1+-yellow.svg)
+  ![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)
+</div>
 
-Um cliente de deploy avançado e flexível com suporte a múltiplos protocolos e observação de mudanças em tempo real.
-Perfeito para desenvolvedores que precisam de uma solução robusta e confiável para automatizar o processo de deploy,
-seja via SSH, FTP ou mesmo localmente.
+## 📋 Índice
 
-## 📋 Características
+- [✨ Características](#-características)
+- [🚀 Instalação](#-instalação)
+- [💻 Uso](#-uso)
+- [⚙️ Configuração](#️-configuração)
+- [🛠️ Desenvolvimento](#️-desenvolvimento)
+- [📊 Testes](#-testes)
+- [📝 Logs](#-logs)
+- [📦 Build](#-build)
+- [📖 Documentação](#-documentação)
+- [📄 Licença](#-licença)
+
+## ✨ Características
 
 - **Múltiplos Protocolos**
   - SSH/SFTP (senha ou chave SSH)
   - FTP
-  - Local (cópia de arquivos local/rede)
-- **Observação em Tempo Real**
-  - Detecta e sincroniza mudanças automaticamente
-  - Suporte a eventos de criação, modificação e deleção
+  - Local (cópia local/rede)
+- **Monitoramento em Tempo Real**
 - **Sistema de Ignore Avançado**
-  - Compatível com padrões .gitignore
-  - Suporte a múltiplos arquivos de ignore
 - **Interface Interativa**
-  - Modo CLI com interface amigável
-  - Suporte a argumentos para automação
-- **Suporte Multi-idioma**
-  - Português
-  - Inglês
-- **Logging Completo**
-  - Logs detalhados de operações
-  - Suporte a diferentes níveis de log
+- **Sistema de Logs Completo**
+- **Verificação Automática de Versão**
+  - Comparação com versão remota
+  - Logs de divergência de versão
+  - Alerta de versão desatualizada
+- **Suporte Multi-plataforma**
+  - Windows
+  - Linux
+  - MacOS
 
 ## 🚀 Instalação
-
-### Via pip
 ```bash
+# Via pip
 pip install noktech-deploy
-```
 
-### Desenvolvimento
-```bash
-git clone https://github.com/Br3n0k/noktech-deploy.git
+# Via Poetry
+poetry add noktech-deploy
+
+# Build do fonte
+git clone https://github.com/Br3n0k/noktech-deploy
 cd noktech-deploy
 poetry install
+python build_config.py build
 ```
 
 ## 💻 Uso
 
-### Modo Interativo
+### Comandos Básicos
 ```bash
+# Modo Interativo
 noktech-deploy
+
+# Deploy SSH
+noktech-deploy --protocol ssh --host exemplo.com --user deploy
+
+# Deploy FTP
+noktech-deploy --protocol ftp --host ftp.exemplo.com --user ftpuser
+
+# Deploy Local
+noktech-deploy --protocol local --files-path ./dados --dest-path /backup
 ```
 
-### SSH
+### Comandos Avançados
 ```bash
-noktech-deploy --protocol ssh --host exemplo.com --user deploy --files-path ./dist --dest-path /var/www/app
+# Watch Mode
+noktech-deploy --watch --files-path ./src
+
+# Ignore Customizado
+noktech-deploy --ignore-file ./custom.ignore
+
+# Log Personalizado
+noktech-deploy --log-dir ./logs --log-level debug
+
+# Configuração Alternativa
+noktech-deploy --config-file ./deploy.json
 ```
 
-### FTP
-```bash
-noktech-deploy --protocol ftp --host ftp.exemplo.com --user ftpuser --files-path ./site --dest-path /public_html
+## ⚙️ Configuração
+
+### Estrutura de Diretórios
+```
+.noktech-deploy/
+├── config/           # Configurações do sistema
+│   └── config.json   # Configuração principal
+├── logs/            # Logs do sistema
+│   ├── deploy-YYYY-MM.log
+│   └── version-YYYY-MM.log
+└── .deployignore    # Regras de ignore
 ```
 
-### Local
-```bash
-noktech-deploy --protocol local --files-path ./dados --dest-path /mnt/backup
-```
-
-### Modo Observador
-```bash
-noktech-deploy --protocol ssh --host exemplo.com --watch
-```
-
-## 📝 Configuração
-
-### .deployignore
-```plaintext
-# Arquivos de desenvolvimento
-__pycache__/
-*.pyc
-venv/
-
-# Build e temporários
-dist/
-build/
-*.tmp
-*.log
-```
-
-### config.json
+### Arquivo config.json para configuração principal
 ```json
 {
     "default_protocol": "ssh",
+    "log_level": "info",
+    "log_dir": ".noktech-deploy/logs",
+    "watch_delay": 1000,
     "hosts": {
         "production": {
             "protocol": "ssh",
             "host": "exemplo.com",
-            "user": "deploy"
+            "port": 22,
+            "user": "deploy",
+            "password": "senha_segura",
+            "key_path": null,
+            "dest_path": "/var/www/app",
+            "timeout": 30,
+            "keep_alive": true,
+            "compression": true,
+            "ignore_file": ".deployignore",
+            "backup": {
+                "enabled": true,
+                "max_backups": 5,
+                "path": "/var/backups/app"
+            },
+            "hooks": {
+                "pre_deploy": "echo 'Iniciando deploy'",
+                "post_deploy": "echo 'Deploy finalizado'"
+            },
+            "retry": {
+                "attempts": 3,
+                "delay": 5
+            }
+        },
+        "staging": {
+            "protocol": "ssh",
+            "host": "staging.exemplo.com",
+            "port": 22,
+            "user": "deploy",
+            "password": "senha_staging",
+            "dest_path": "/var/www/staging"
         }
-    }
+    },
+    "ignore_patterns": [
+        "*.pyc",
+        "__pycache__/",
+        "*.log",
+        ".git/"
+    ]
 }
 ```
+### Arquivo .deployignore para ignorar arquivos específicos no deploy
+````bash
+# Arquivos de desenvolvimento
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-## 📚 Documentação
+# Ambientes virtuais
+.env
+.venv/
+venv/
+ENV/
+env/
+
+# IDEs e editores
+.idea/
+.vscode/
+*.swp
+*.swo
+.project
+.pydevproject
+.settings/
+*.sublime-workspace
+*.sublime-project
+
+# Logs e caches
+*.log
+logs/
+.coverage
+coverage/
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+*.tmp
+*~
+Desktop.ini
+
+# Arquivos de configuração local
+*.local.json
+*.local.yml
+*.local.yaml
+config.local.*
+.env.local
+
+# Dependências
+node_modules/
+bower_components/
+jspm_packages/
+web_modules/
+
+# Arquivos de build
+dist/
+build/
+out/
+*.min.js
+*.min.css
+
+# Forçar inclusão de arquivos específicos
+!dist/assets/
+!dist/static/
+!build/production.config.js
+
+# Arquivos sensíveis
+*.pem
+*.key
+*.cert
+*.password
+secrets.json
+credentials.json
+```
+
+## 🛠️ Desenvolvimento
+
+```bash
+# Instalar dependências
+poetry install
+
+# Ativar ambiente virtual
+poetry shell
+
+# Executar linting
+poetry run ruff check .
+poetry run black .
+
+# Atualizar versão
+poetry run python scripts/update_version.py <version>
+```
+
+## 📊 Testes
+
+```bash
+# Executar todos os testes
+poetry run pytest
+
+# Testes com cobertura
+poetry run pytest --cov=src
+
+# Testes específicos
+poetry run pytest tests/test_deployers.py -v
+
+# Relatório HTML de cobertura
+poetry run pytest --cov=src --cov-report=html
+```
+
+## 📝 Logs
+
+```bash
+# Visualizar logs de deploy
+cat .noktech-deploy/logs/deploy-$(date +%Y-%m).log
+
+# Visualizar logs de versão
+cat .noktech-deploy/logs/version-$(date +%Y-%m).log
+
+# Listar todos os logs
+ls -l .noktech-deploy/logs/
+
+# Limpar logs antigos (mantém últimos 30 dias)
+noktech-deploy --clean-logs
+
+# Verificar versão atual
+noktech-deploy --version
+```
+
+## 📦 Build
+
+```bash
+# Build completo
+poetry run python -m build
+
+# Apenas limpeza
+poetry run python -m build clean
+
+# Build do pacote
+poetry build
+
+# Instalar localmente
+pip install dist/noktech_deploy-*.whl
+```
+
+## 📖 Documentação
 
 - [Guia de Início Rápido](docs/quickstart.md)
 - [Configuração Avançada](docs/configuration.md)
+- [Sistema de Ignore](docs/ignore_rules.md)
 - [API de Referência](docs/api.md)
-- [Contribuindo](docs/contributing.md)
+- [Changelog](CHANGELOG.md)
+
+### Verificação de Versão
+O NokTech Deploy verifica automaticamente se sua versão local está atualizada em relação à versão remota no repositório oficial. Quando uma divergência é detectada:
+
+1. Uma mensagem de alerta é exibida
+2. A divergência é registrada no arquivo de log
+3. O usuário é notificado para atualizar
+
+Os logs de versão são armazenados em:
+```
+.noktech-deploy/logs/version-YYYY-MM.log
+```
 
 ## 📄 Licença
 
-MIT License - veja [LICENSE](LICENSE) para mais detalhes.
+Este projeto está licenciado sob a MIT License - veja o arquivo [LICENSE](LICENSE) para detalhes.
 
 ## 👤 Autor
 
 **Brendown Ferreira**
 - GitHub: [@Br3n0k](https://github.com/Br3n0k)
-- Email: br3n0k@gmail.com 
+- Email: br3n0k@gmail.com

@@ -21,26 +21,54 @@ wheels/
 *.egg
 
 # Virtual Environment
+.venv/
 venv/
 ENV/
 env/
+.env
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+.project
+.pydevproject
+.settings/
 
-# Logs
+# Logs e Cache
 *.log
 logs/
-
-# Local configs
-.env
-config.local.json
-
-# Tests
 .coverage
+coverage/
 htmlcov/
-.pytest_cache/ 
-*.spec
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Arquivos temporários
+*.tmp
+*.temp
+*~
+.DS_Store
+Thumbs.db
+
+# Arquivos de configuração local
+*.local.json
+*.local.yml
+*.local.yaml
+config.local.*
+
+# Deploy específico
+.deployignore.local
+deploy.config.json
+deploy.local.*
+
+# Poetry
+poetry.lock
+dist/
+
+# Noktech
+.noktech-deploy
+.deployignore
+site/

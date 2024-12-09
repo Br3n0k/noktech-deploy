@@ -1,11 +1,8 @@
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-from typing import Callable, Optional, Dict
-import time
-import os
-from .ignore_rules import IgnoreRules
-from ..utils.logger import Logger
+from typing import Callable
 import asyncio
+
 
 class AsyncEventHandler(FileSystemEventHandler):
     def __init__(self, callback):
@@ -14,45 +11,53 @@ class AsyncEventHandler(FileSystemEventHandler):
 
     def on_created(self, event):
         if not event.is_directory:
-            asyncio.create_task(self.callback(event.src_path, 'created'))
-            
+            asyncio.create_task(self.callback(event.src_path, "created"))
+
     def on_modified(self, event):
         if not event.is_directory:
-            asyncio.create_task(self.callback(event.src_path, 'modified'))
-            
+            asyncio.create_task(self.callback(event.src_path, "modified"))
+
     def on_deleted(self, event):
         if not event.is_directory:
-            asyncio.create_task(self.callback(event.src_path, 'deleted'))
+            asyncio.create_task(self.callback(event.src_path, "deleted"))
+
 
 class DirectoryWatcher:
-    def __init__(self, 
-                 path: str,
-                 callback: Callable,
-                 ignore_rules: Optional[IgnoreRules] = None,
-                 logger: Optional[Logger] = None):
-        self.path = os.path.abspath(path)
+    def __init__(self, path: str, callback: Callable, ignore_rules=None):
+        self.path = path
         self.callback = callback
         self.ignore_rules = ignore_rules
-        self.logger = logger or Logger()
         self.observer = Observer()
         self._running = False
+        self._loop = asyncio.get_event_loop()
+
+        def sync_callback(path: str, event_type: str):
+            self._loop.create_task(self.callback(path, event_type))
+
+        self.handler = FileSystemEventHandler()
+        self.handler.on_created = lambda e: (
+            sync_callback(e.src_path, "created") if not e.is_directory else None
+        )
+        self.handler.on_modified = lambda e: (
+            sync_callback(e.src_path, "modified") if not e.is_directory else None
+        )
+        self.handler.on_deleted = lambda e: (
+            sync_callback(e.src_path, "deleted") if not e.is_directory else None
+        )
+
+        self.observer.schedule(self.handler, path, recursive=True)
 
     async def start(self):
-        """Inicia a observação do diretório"""
-        event_handler = AsyncEventHandler(self.callback)
-        self.observer.schedule(event_handler, self.path, recursive=True)
+        self._running = True
         self.observer.start()
-        
         try:
-            while True:
-                await asyncio.sleep(1)
-        except KeyboardInterrupt:
-            self.observer.stop()
-            self.observer.join()
+            while self._running:
+                await asyncio.sleep(0.1)
+        finally:
+            self.stop()
 
     def stop(self):
-        """Para o observador"""
         self._running = False
-        self.observer.stop()
-        self.observer.join()
-        self.logger.info("Observador finalizado") 
+        if self.observer.is_alive():
+            self.observer.stop()
+            self.observer.join()

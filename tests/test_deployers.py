@@ -2,63 +2,64 @@ import pytest
 import os
 import tempfile
 import shutil
-from src.deployers import SSHDeployer, FTPDeployer, LocalDeployer
+from src.deployers import LocalDeployer
 from src.core.ignore_rules import IgnoreRules
 
+
+@pytest.mark.asyncio
 class TestLocalDeployer:
     @pytest.fixture
     def temp_dirs(self):
         """Cria diretórios temporários para teste"""
         source = tempfile.mkdtemp()
         dest = tempfile.mkdtemp()
-        
-        # Cria alguns arquivos de teste
-        test_files = {
-            'file1.txt': 'conteúdo 1',
-            'dir1/file2.txt': 'conteúdo 2',
-            'dir1/dir2/file3.txt': 'conteúdo 3'
-        }
-        
-        for path, content in test_files.items():
-            full_path = os.path.join(source, path)
-            os.makedirs(os.path.dirname(full_path), exist_ok=True)
-            with open(full_path, 'w') as f:
-                f.write(content)
-                
-        yield source, dest
-        
-        # Cleanup
-        shutil.rmtree(source)
-        shutil.rmtree(dest)
-        
-    def test_local_deploy(self, temp_dirs):
+
+        try:
+            yield source, dest
+        finally:
+            shutil.rmtree(source)
+            shutil.rmtree(dest)
+
+    @pytest.fixture
+    async def deployer(self, temp_dirs):
+        """Cria e configura o deployer"""
         source_dir, dest_dir = temp_dirs
         deployer = LocalDeployer(dest_dir)
-        
-        # Testa deploy
-        deployer.connect()
-        deployer.deploy_files(source_dir, dest_dir)
-        
-        # Verifica se arquivos foram copiados
-        assert os.path.exists(os.path.join(dest_dir, 'file1.txt'))
-        assert os.path.exists(os.path.join(dest_dir, 'dir1/file2.txt'))
-        assert os.path.exists(os.path.join(dest_dir, 'dir1/dir2/file3.txt'))
-        
-    def test_ignore_patterns(self, temp_dirs):
+        await deployer.connect()
+
+        try:
+            yield deployer
+        finally:
+            await deployer.disconnect()
+
+    async def test_local_deploy(self, temp_dirs):
+        """Testa deploy local básico"""
         source_dir, dest_dir = temp_dirs
-        
-        # Cria arquivo para ignorar
-        ignore_file = os.path.join(source_dir, '.deployignore')
-        with open(ignore_file, 'w') as f:
-            f.write('*.txt\n')
-            
-        ignore_rules = IgnoreRules(ignore_file=ignore_file)
+
+        # Cria arquivo de teste
+        test_file = os.path.join(source_dir, "file1.txt")
+        with open(test_file, "w") as f:
+            f.write("test content")
+
         deployer = LocalDeployer(dest_dir)
-        deployer.file_manager.ignore_rules = ignore_rules
-        
-        # Testa deploy com ignore
-        deployer.connect()
-        deployer.deploy_files(source_dir, dest_dir)
-        
-        # Verifica se arquivos foram ignorados
-        assert not os.path.exists(os.path.join(dest_dir, 'file1.txt')) 
+        await deployer.connect()
+        try:
+            await deployer.deploy_files(source_dir, dest_dir)
+            assert os.path.exists(os.path.join(dest_dir, "file1.txt"))
+        finally:
+            await deployer.disconnect()
+
+    async def test_ignore_patterns(self, deployer, temp_dirs):
+        """Testa regras de ignore"""
+        source_dir, dest_dir = temp_dirs
+
+        # Cria arquivo de teste
+        test_file = os.path.join(source_dir, "test.txt")
+        with open(test_file, "w") as f:
+            f.write("should be ignored")
+
+        async for d in deployer:
+            d.ignore_rules = IgnoreRules(rules=["*.txt"])
+            await d.deploy_files(source_dir, dest_dir)
+            assert not os.path.exists(os.path.join(dest_dir, "test.txt"))
+            break

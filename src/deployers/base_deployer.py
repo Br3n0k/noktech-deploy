@@ -1,20 +1,25 @@
 from abc import ABC, abstractmethod
 from typing import Optional
-from pathlib import Path
 import os
 from src.core.ignore_rules import IgnoreRules
 from src.core.logger import Logger
-from src.i18n import I18n
+
 
 class BaseDeployer(ABC):
-    def __init__(self, host: str, user: str, password: Optional[str] = None, port: int = 22):
+    def __init__(
+        self,
+        host: Optional[str] = None,
+        user: Optional[str] = None,
+        password: Optional[str] = None,
+        port: int = 22,
+    ):
         self.host = host
         self.user = user
         self.password = password
         self.port = port
         self.ignore_rules: Optional[IgnoreRules] = None
         self.logger = Logger()
-        self.overwrite_existing = True  # Padrão: sobrescreve
+        self.overwrite_existing = True
 
     def set_overwrite_mode(self, overwrite: bool):
         """Define se arquivos existentes devem ser sobrescritos"""
@@ -25,7 +30,7 @@ class BaseDeployer(ABC):
         if not self.overwrite_existing:
             if await self.file_exists(remote_path):
                 return  # Pula arquivo existente
-        
+
         await self._deploy_file(local_path, remote_path)
 
     @abstractmethod
@@ -64,9 +69,9 @@ class BaseDeployer(ABC):
             for file in files:
                 local_path = os.path.join(root, file)
                 relative_path = os.path.relpath(local_path, source_path)
-                remote_path = os.path.join(dest_path, relative_path).replace('\\', '/')
-                
+                remote_path = os.path.join(dest_path, relative_path).replace("\\", "/")
+
                 if self.ignore_rules and self.ignore_rules.should_ignore(relative_path):
                     continue
-                    
+
                 await self._deploy_file(local_path, remote_path)

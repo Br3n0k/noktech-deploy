@@ -1,7 +1,7 @@
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(0, 1, 0, 0),
-    prodvers=(0, 1, 0, 0),
+    filevers=(0, 1, 2, 0),
+    prodvers=(0, 1, 2, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -14,13 +14,13 @@ VSVersionInfo(
       StringTable(
         u'040904B0',
         [StringStruct(u'CompanyName', u'NokTech'),
-         StringStruct(u'FileDescription', u'NokTech Deploy - Cliente de deploy avançado com suporte a múltiplos protocolos'),
-         StringStruct(u'FileVersion', u'0.1.0'),
+         StringStruct(u'FileDescription', u'NokTech Deploy - Advanced deployment client with multiple protocols support'),
+         StringStruct(u'FileVersion', u'0.1.2'),
          StringStruct(u'InternalName', u'noktech-deploy'),
          StringStruct(u'LegalCopyright', u'Copyright (c) 2024 Brendown Ferreira'),
          StringStruct(u'OriginalFilename', u'noktech-deploy.exe'),
          StringStruct(u'ProductName', u'NokTech Deploy'),
-         StringStruct(u'ProductVersion', u'0.1.0')])
+         StringStruct(u'ProductVersion', u'0.1.2')])
     ])
   ]
 ) 

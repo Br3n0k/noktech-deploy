@@ -1,0 +1,59 @@
+site_name: NokTech Deploy
+site_description: Ferramenta de deploy simples e flexível
+repo_url: https://github.com/noktech/deploy
+theme:
+  name: material
+  palette:
+    primary: indigo
+    accent: blue
+  language: pt
+
+plugins:
+  - search
+  - i18n:
+      default_language: pt
+      languages:
+        en: English
+        pt: Português
+
+nav:
+  - pt:
+    - Início: pt/index.md
+    - Guia:
+      - Instalação: pt/guide/installation.md
+      - Configuração: pt/guide/configuration.md
+      - Uso: pt/guide/usage.md
+    - API:
+      - Core: pt/api/core.md
+      - Deployers: pt/api/deployers.md
+      - Utils: pt/api/utils.md
+  - en:
+    - Home: en/index.md
+    - Guide:
+      - Installation: en/guide/installation.md
+      - Configuration: en/guide/configuration.md
+      - Usage: en/guide/usage.md
+    - API:
+      - Core: en/api/core.md
+      - Deployers: en/api/deployers.md
+      - Utils: en/api/utils.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - admonition
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+
+extra:
+  alternate:
+    - name: English
+      link: /en/
+      lang: en
+    - name: Português
+      link: /pt/
+      lang: pt
