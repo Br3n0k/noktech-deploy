@@ -1,161 +1,123 @@
-from typing import Optional
-import asyncssh
-import os
+"""
+Implementação do deployer SSH/SFTP
+"""
+from typing import List, Optional
 from pathlib import Path
+import asyncssh  # type: ignore
+
 from src.deployers.base_deployer import BaseDeployer
-from ..core.file_manager import FileManager
-from ..utils.logger import Logger
+from src.deployers.sync_mixin import SyncMixin
+from src.deployers.progress_mixin import ProgressMixin
+from src.core.constants import CONNECTION_TIMEOUT
 
 
-class SSHDeployer(BaseDeployer):
-    def __init__(self, config: dict):
-        super().__init__(config)
-        self.client = None
-        self.sftp = None
-        
+class SSHDeployer(BaseDeployer, SyncMixin, ProgressMixin):
+    """Implementação de deployer via SSH"""
+
+    def __init__(self, host_name: str, config: dict) -> None:
+        super().__init__(host_name, config)
+        ProgressMixin.__init__(self)
+        self.host = config["host"]
+        self.user = config["user"]
+        self.password = config.get("password")
+        self.key_path = config.get("key_path")
+        self.port = config.get("port", 22)
+        self.conn: Optional[asyncssh.SSHClientConnection] = None
+
     async def connect(self) -> None:
         """Estabelece conexão SSH"""
         try:
-            self.conn = await asyncssh.connect(
-                self.config["host"],
-                username=self.config["user"],
-                password=self.config.get("password"),
-                port=self.config.get("port", 22),
-                known_hosts=None  # TODO: Implementar verificação de known_hosts
-            )
-            self.sftp = await self.conn.start_sftp_client()
+            if self.key_path:
+                self.conn = await asyncssh.connect(
+                    self.host,
+                    username=self.user,
+                    client_keys=[self.key_path],
+                    port=self.port,
+                    timeout=CONNECTION_TIMEOUT
+                )
+            else:
+                self.conn = await asyncssh.connect(
+                    self.host,
+                    username=self.user,
+                    password=self.password,
+                    port=self.port,
+                    timeout=CONNECTION_TIMEOUT
+                )
+            self.logger.info(f"Connected to {self.host} via SSH")
         except Exception as e:
-            raise ConnectionError(f"Falha na conexão SSH: {str(e)}")
+            self.logger.error(f"SSH connection failed: {e}")
+            raise
 
     async def disconnect(self) -> None:
         """Encerra conexão SSH"""
-        if hasattr(self, 'sftp'):
-            await self.sftp.close()
-        if hasattr(self, 'conn'):
+        if self.conn:
             self.conn.close()
             await self.conn.wait_closed()
+            self.logger.info(f"Disconnected from {self.host}")
 
-    async def upload_file(self, source: Path, dest: str) -> None:
-        """Upload de arquivo via SSH/SFTP"""
-        try:
-            await self._ensure_remote_dir(str(Path(dest).parent))
-            sftp_client = await self.conn.start_sftp_client()
-            try:
-                await sftp_client.put(str(source), dest)
-            finally:
-                await sftp_client.close()
-        except Exception as e:
-            self.logger.error(f"Erro no upload do arquivo {source}: {str(e)}")
-            raise
-
-    async def _ensure_remote_dir(self, path: str) -> None:
+    async def ensure_remote_dir(self, path: Path) -> None:
         """Garante que o diretório remoto existe"""
-        try:
-            await self.sftp.mkdir(path, parents=True)
-        except asyncssh.SFTPError:
-            pass  # Diretório já existe
+        if not self.conn:
+            raise RuntimeError("SSH connection not established")
+        await self.conn.run(f'mkdir -p "{path}"')
 
-    async def deploy_file(self, source: Path, dest: Path) -> bool:
-        """Deploy de um arquivo via SFTP"""
-        try:
-            if not self.sftp:
-                self.sftp = await self.client.start_sftp_client()
-
-            # Normaliza caminhos
-            dest_str = str(dest).replace("\\", "/")
-            
-            # Cria diretórios remotos
-            await self._ensure_remote_dirs(dest.parent)
-            
-            # Upload do arquivo
-            await self.sftp.put(str(source), dest_str)
-            self.logger.debug(self.i18n.get("ssh.file_uploaded").format(dest_str))
-            return True
-            
-        except Exception as e:
-            self.logger.error(self.i18n.get("ssh.upload_failed").format(
-                str(source), str(e)))
-            return False
-
-    async def deploy_directory(self, source: Path, dest: Path) -> bool:
-        """Deploy de um diretório completo via SFTP"""
+    async def deploy_directory(self, path: Path) -> None:
+        """Deploy de diretório via SSH"""
         try:
             await self.connect()
-            success = True
-            total_files = 0
-            uploaded_files = 0
-
-            # Processa cada arquivo no diretório fonte
-            for src_file in source.rglob("*"):
-                if src_file.is_file():
-                    total_files += 1
-                    
-                    # Verifica padrões de ignore
-                    if self.should_ignore(src_file):
-                        self.logger.debug(self.i18n.get("deploy.file_ignored").format(
-                            str(src_file), "pattern match"))
-                        continue
-
-                    # Calcula caminho relativo para destino
-                    rel_path = src_file.relative_to(source)
-                    dest_file = Path(dest) / rel_path
-
-                    # Faz upload do arquivo
-                    if await self.deploy_file(src_file, dest_file):
-                        uploaded_files += 1
-                    else:
-                        success = False
-
-            self.logger.info(self.i18n.get("ssh.upload_complete").format(
-                uploaded_files, total_files))
-            return success
-
-        except Exception as e:
-            self.logger.error(self.i18n.get("ssh.deploy_failed").format(str(e)))
-            return False
-
+            if self.conn:
+                # Lista todos os arquivos antes de iniciar
+                files = [f for f in path.rglob("*") if f.is_file()]
+                await self.prepare_transfer(files)
+                
+                async with self.conn.start_sftp_client() as sftp:
+                    for file in files:
+                        dest = Path(self.dest_path) / file.relative_to(path)
+                        await self.sync_file(file, dest)
+                
+                await self.complete_transfer()
         finally:
-            if self.sftp:
-                self.sftp.close()
-            if self.client:
-                self.client.close()
+            await self.disconnect()
 
-    async def ensure_remote_dir(self, path: str) -> None:
-        """Cria diretório remoto"""
+    async def deploy_files(self, files: List[Path]) -> None:
+        """Deploy de arquivos específicos via SSH"""
         try:
-            await self.client.run(f'mkdir -p "{str(path)}"')
+            await self.connect()
+            if self.conn:
+                await self.prepare_transfer(files)
+                
+                async with self.conn.start_sftp_client() as sftp:
+                    for file in files:
+                        if file.is_file():
+                            dest = Path(self.dest_path) / file.relative_to(self.source_path)
+                            await self.sync_file(file, dest)
+                
+                await self.complete_transfer()
+        finally:
+            await self.disconnect()
+
+    async def sync_file(self, source: Path, dest: Path) -> None:
+        """Sincroniza um arquivo via SSH com progresso"""
+        if not self.conn:
+            raise RuntimeError("SSH connection not established")
+        
+        try:
+            await self.ensure_remote_dir(dest.parent)
+            
+            # Implementa transferência com progresso
+            async with self.conn.start_sftp_client() as sftp:
+                # Cria callback para progresso
+                async def progress_callback(bytes_transferred: int, _: int) -> None:
+                    await self.update_progress(source, bytes_transferred)
+                
+                # Inicia transferência com callback
+                await sftp.put(
+                    str(source),
+                    str(dest),
+                    progress_handler=progress_callback
+                )
+                
+            self.logger.debug(f"Synced {source} -> {dest}")
         except Exception as e:
-            raise Exception(f"Erro ao criar diretório: {e}")
-
-    async def file_exists(self, path: str) -> bool:
-        """Verifica se arquivo existe"""
-        try:
-            await self.sftp.stat(str(path))
-            return True
-        except FileNotFoundError:
-            return False
-
-    async def get_remote_mtime(self, path: str) -> float:
-        """Obtém data de modificação"""
-        stat = await self.sftp.stat(str(path))
-        return stat.mtime
-
-    async def _deploy_file(self, src, dest):
-        """Faz upload do arquivo"""
-        await self.sftp.put(str(src), str(dest))
-
-    async def handle_change(self, path: str, event_type: str) -> None:
-        """Manipula mudanças em arquivos"""
-        try:
-            remote_path = os.path.join(self.dest_path, path).replace("\\", "/")
-
-            if event_type in ("created", "modified"):
-                await self.ensure_remote_dir(str(Path(remote_path).parent))
-                await self._deploy_file(path, remote_path)
-            elif event_type == "deleted":
-                try:
-                    await self.sftp.remove(remote_path)
-                except FileNotFoundError:
-                    pass
-        except Exception as e:
-            self.logger.error(f"Erro ao processar mudança: {e}")
+            self.logger.error(f"Failed to sync file {source}: {e}")
+            raise

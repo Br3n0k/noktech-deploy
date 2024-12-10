@@ -1,75 +1,74 @@
+"""
+Logger customizado
+"""
 import logging
-import sys
+from logging import Logger, getLogger, FileHandler, Formatter
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
-from src.core.constants import DEFAULT_LOG_DIR, LOG_FILE_FORMAT
+
+from src.core.constants import (
+    LOGS_DIR,
+    LOG_FILE_FORMAT,
+    LOG_LEVEL,
+    LOG_FORMAT,
+    VERSION_LOG_DIR
+)
 from src.i18n import I18n
 
-class Logger:
-    _instances = {}
-    _initialized = False
-    _i18n = I18n()
 
-    def __new__(cls, name: str):
-        if name not in cls._instances:
-            cls._instances[name] = super().__new__(cls)
-        return cls._instances[name]
+class CustomLogger(Logger):
+    """Logger customizado com métodos adicionais"""
 
-    def __init__(self, name: str):
-        if not hasattr(self, 'logger'):
-            self.logger = logging.getLogger(name)
-            
-            if not Logger._initialized:
-                self._setup_logging()
-                Logger._initialized = True
+    @classmethod
+    def get_logger(cls, name: str) -> "CustomLogger":
+        """Retorna uma instância do logger"""
+        logger = getLogger(name)
+        if not isinstance(logger, cls):
+            logger = cls(name)
+        return logger
 
-    def _setup_logging(self):
-        """Configura o sistema de logging"""
-        try:
-            # Cria diretório de logs
-            DEFAULT_LOG_DIR.mkdir(parents=True, exist_ok=True)
-            
-            # Nome do arquivo de log
-            log_file = DEFAULT_LOG_DIR / LOG_FILE_FORMAT.format(
-                datetime.now().strftime("%Y%m%d_%H%M%S"))
-            
-            # Configura formato
-            formatter = logging.Formatter(
-                '%(asctime)s - %(levelname)s - %(message)s',
-                datefmt='%Y-%m-%d %H:%M:%S'
-            )
-            
-            # Handler para arquivo
-            file_handler = logging.FileHandler(log_file, encoding='utf-8')
-            file_handler.setFormatter(formatter)
-            
-            # Handler para console
-            console_handler = logging.StreamHandler(sys.stdout)
-            console_handler.setFormatter(formatter)
-            
-            # Configura root logger
-            root_logger = logging.getLogger()
-            root_logger.setLevel(logging.INFO)
-            root_logger.addHandler(file_handler)
-            root_logger.addHandler(console_handler)
-            
-        except Exception as e:
-            print(self._i18n.get("app.error.fatal").format(
-                f"Erro ao configurar logging: {str(e)}"))
-            sys.exit(1)
+    def __init__(self, name: str) -> None:
+        super().__init__(name)
+        self.i18n = I18n()
+        self.setup_logger()
 
-    def debug(self, msg: str):
-        self.logger.debug(msg)
+    def setup_logger(self) -> None:
+        """Configura o logger com handlers e formatters"""
+        self.setLevel(LOG_LEVEL)
 
-    def info(self, msg: str):
-        self.logger.info(msg)
+        # Garante que o diretório de logs existe
+        LOGS_DIR.mkdir(parents=True, exist_ok=True)
+        log_file = LOGS_DIR / datetime.now().strftime(LOG_FILE_FORMAT)
 
-    def warning(self, msg: str):
-        self.logger.warning(msg)
+        # Configura handler de arquivo
+        file_handler = FileHandler(log_file, encoding="utf-8")
+        file_handler.setFormatter(Formatter(LOG_FORMAT["file"]))
+        self.addHandler(file_handler)
 
-    def error(self, msg: str):
-        self.logger.error(msg)
+        # Configura handler de console
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(Formatter(LOG_FORMAT["console"]))
+        self.addHandler(console_handler)
 
-    def critical(self, msg: str):
-        self.logger.critical(msg)
+        # Log de inicialização
+        self.info(self.i18n.get("logger.initialized").format(log_file))
+
+    def log_version_info(self) -> None:
+        """Loga informações de versão"""
+        version_log_file = VERSION_LOG_DIR / datetime.now().strftime(LOG_FILE_FORMAT)
+        version_log_file.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(version_log_file, "a", encoding="utf-8") as f:
+            f.write(self.i18n.get("logger.version_info").format(datetime.now()))
+
+    def log_error(self, message: str) -> None:
+        """Loga uma mensagem de erro"""
+        self.error(self.i18n.get("logger.error").format(message))
+
+    def log_warning(self, message: str) -> None:
+        """Loga uma mensagem de aviso"""
+        self.warning(self.i18n.get("logger.warning").format(message))
+
+    def log_info(self, message: str) -> None:
+        """Loga uma mensagem de informação"""
+        self.info(self.i18n.get("logger.info").format(message))

@@ -1,150 +1,91 @@
-import os
+"""
+Implementação do deployer local
+"""
+from typing import Dict, List
 import shutil
-import asyncio
 from pathlib import Path
+import aiofiles  # type: ignore
+
 from src.deployers.base_deployer import BaseDeployer
+from src.deployers.sync_mixin import SyncMixin
+from src.deployers.progress_mixin import ProgressMixin
 
 
-class LocalDeployer(BaseDeployer):
-    def __init__(self, config: dict = None):
-        super().__init__(config or {"protocol": "local"})
+class LocalDeployer(BaseDeployer, SyncMixin, ProgressMixin):
+    """Implementação de deployer para deploy local"""
 
-    async def deploy_file(self, source: Path, dest: Path) -> bool:
-        """
-        Deploy de um arquivo local
-        """
-        try:
-            # Garante que o diretório de destino existe
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            
-            # Copia o arquivo preservando metadados
-            shutil.copy2(source, dest)
-            self.logger.debug(self.i18n.get("local.copying").format(
-                str(source), str(dest)))
-            return True
-            
-        except Exception as e:
-            self.logger.error(self.i18n.get("local.error.copy").format(str(e)))
-            return False
-
-    async def deploy_directory(self, source: Path, dest: Path) -> bool:
-        """
-        Deploy de um diretório local completo
-        """
-        try:
-            source = Path(source).resolve()
-            dest = Path(dest).resolve()
-            
-            self.logger.info(self.i18n.get("local.copying_dir").format(
-                str(source), str(dest)))
-            
-            # Garante que o diretório de destino existe
-            dest.mkdir(parents=True, exist_ok=True)
-            
-            success = True
-            total_files = 0
-            copied_files = 0
-            
-            # Processa cada arquivo no diretório fonte
-            for src_file in source.rglob("*"):
-                if src_file.is_file():
-                    total_files += 1
-                    
-                    # Verifica padrões de ignore
-                    if self.should_ignore(src_file):
-                        self.logger.debug(self.i18n.get("deploy.file_ignored").format(
-                            str(src_file), "pattern match"))
-                        continue
-                    
-                    # Calcula caminho relativo para destino
-                    try:
-                        rel_path = src_file.relative_to(source)
-                        dest_file = dest / rel_path
-                        
-                        # Faz a cópia do arquivo
-                        if await self.deploy_file(src_file, dest_file):
-                            copied_files += 1
-                        else:
-                            success = False
-                            
-                    except Exception as e:
-                        self.logger.error(self.i18n.get("local.path_error").format(
-                            str(src_file), str(e)))
-                        success = False
-            
-            # Log do resultado
-            self.logger.info(self.i18n.get("local.copy_complete").format(
-                copied_files, total_files))
-            
-            return success
-            
-        except Exception as e:
-            self.logger.error(self.i18n.get("local.deploy_failed").format(str(e)))
-            return False
-
-    async def _ensure_dest_dir(self, path: Path) -> None:
-        """
-        Garante que o diretório de destino existe
-        """
-        try:
-            path.mkdir(parents=True, exist_ok=True)
-        except Exception as e:
-            raise Exception(self.i18n.get("local.mkdir_failed").format(
-                str(path), str(e)))
+    def __init__(self, host_name: str, config: Dict) -> None:
+        super().__init__(host_name, config)
+        ProgressMixin.__init__(self)
 
     async def connect(self) -> None:
-        """Não é necessário conectar para deploy local"""
+        """Não necessário para deploy local"""
         pass
 
     async def disconnect(self) -> None:
-        """Não é necessário desconectar para deploy local"""
+        """Não necessário para deploy local"""
         pass
 
-    async def ensure_remote_dir(self, path):
-        """Garante que diretório existe"""
-        os.makedirs(str(path), exist_ok=True)
-
-    async def file_exists(self, path):
-        """Verifica se arquivo existe"""
-        return os.path.exists(str(path))
-
-    async def get_remote_mtime(self, path):
-        """Obtém data de modificação"""
-        return os.path.getmtime(str(path))
-
-    async def _deploy_file(self, src, dest):
-        """Copia um arquivo"""
-        shutil.copy2(str(src), str(dest))
-
-    async def handle_change(self, path, event_type):
-        """Manipula mudanças em arquivos"""
+    async def ensure_remote_dir(self, path: Path) -> None:
+        """Garante existência de diretório local"""
         try:
-            if event_type in ("created", "modified"):
-                await self._deploy_file(path, os.path.join(self.dest_path, path))
-            elif event_type == "deleted":
-                try:
-                    os.remove(os.path.join(self.dest_path, path))
-                except FileNotFoundError:
-                    pass
+            path.mkdir(parents=True, exist_ok=True)
+            self.logger.debug(f"Created directory: {path}")
         except Exception as e:
-            self.logger.error(f"Erro ao processar mudança: {e}")
-
-    async def upload_file(self, source: Path, dest: str) -> None:
-        """Copia arquivo localmente"""
-        try:
-            source_path = Path(source)
-            dest_path = Path(dest)
-            
-            # Garante que o diretório fonte existe
-            if not source_path.exists():
-                source_path.parent.mkdir(parents=True, exist_ok=True)
-                source_path.touch()
-            
-            # Garante que o diretório destino existe
-            dest_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            # Copia o arquivo
-            shutil.copy2(str(source_path), str(dest_path))
-        except Exception as e:
-            self.logger.error(f"Erro na cópia do arquivo {source}: {str(e)}")
+            self.logger.error(f"Failed to create directory {path}: {e}")
             raise
+
+    async def deploy_directory(self, path: Path) -> None:
+        """Deploy de diretório local"""
+        # Lista todos os arquivos antes de iniciar
+        files = [f for f in path.rglob("*") if f.is_file()]
+        await self.prepare_transfer(files)
+        
+        for file in files:
+            dest = Path(self.dest_path) / file.relative_to(path)
+            await self.sync_file(file, dest)
+        
+        await self.complete_transfer()
+
+    async def deploy_files(self, files: List[Path]) -> None:
+        """Deploy de arquivos específicos local"""
+        await self.prepare_transfer(files)
+        
+        for file in files:
+            if file.is_file():
+                dest = Path(self.dest_path) / file.relative_to(self.source_path)
+                await self.sync_file(file, dest)
+        
+        await self.complete_transfer()
+
+    async def sync_file(self, source: Path, dest: Path) -> None:
+        """Sincroniza um arquivo localmente com progresso"""
+        try:
+            await self.ensure_remote_dir(dest.parent)
+            
+            # Implementa cópia com progresso
+            total_size = source.stat().st_size
+            bytes_transferred = 0
+            
+            async with aiofiles.open(source, 'rb') as src_file:
+                async with aiofiles.open(dest, 'wb') as dst_file:
+                    while chunk := await src_file.read(8192):
+                        await dst_file.write(chunk)
+                        bytes_transferred += len(chunk)
+                        await self.update_progress(source, len(chunk))
+            
+            # Preserva metadados
+            shutil.copystat(source, dest)
+            
+            self.logger.debug(f"Synced {source} -> {dest}")
+        except Exception as e:
+            self.logger.error(f"Failed to sync file {source}: {e}")
+            raise
+
+    def file_exists(self, path: Path) -> bool:
+        """Verifica se arquivo existe"""
+        return path.exists()
+
+    def get_remote_mtime(self, path: Path) -> float:
+        """Obtém timestamp de modificação"""
+        return path.stat().st_mtime

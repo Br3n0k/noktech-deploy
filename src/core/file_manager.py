@@ -1,82 +1,74 @@
-import os
-from typing import List, Tuple, Optional
-from .ignore_rules import IgnoreRules
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
-import time
-import asyncio
+from __future__ import annotations
+from pathlib import Path
+from typing import List, Tuple, Optional, Callable, Awaitable, TypeAlias
+from watchdog.observers.api import BaseObserver as Observer
+from watchdog.observers.polling import PollingObserverVFS
 
+from src.core.ignore_rules import IgnoreRules
+from src.utils.logger import CustomLogger
+from src.core.watch_manager import AsyncWatchEventHandler
+from src.core.constants import WATCH_INTERVAL
 
-class FileChangeHandler(FileSystemEventHandler):
-    def __init__(self, callback, ignore_rules=None):
-        self.callback = callback
-        self.ignore_rules = ignore_rules
-        self.loop = None
-
-    def _get_loop(self):
-        if self.loop is None:
-            try:
-                self.loop = asyncio.get_running_loop()
-            except RuntimeError:
-                self.loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(self.loop)
-        return self.loop
-
-    async def _handle_event(self, event, event_type):
-        if not event.is_directory:
-            rel_path = os.path.relpath(event.src_path)
-            if not self.ignore_rules or not self.ignore_rules.should_ignore(rel_path):
-                await self.callback(event.src_path, event_type)
-
-    def on_created(self, event):
-        loop = self._get_loop()
-        loop.create_task(self._handle_event(event, "created"))
-
-    def on_modified(self, event):
-        loop = self._get_loop()
-        loop.create_task(self._handle_event(event, "modified"))
-
-    def on_deleted(self, event):
-        loop = self._get_loop()
-        loop.create_task(self._handle_event(event, "deleted"))
+OnChangeCallback: TypeAlias = Callable[[Path], Awaitable[None]]
 
 
 class FileManager:
-    def __init__(
-        self,
-        base_path: Optional[str] = None,
-        ignore_rules: Optional[IgnoreRules] = None,
-    ):
-        self.ignore_rules = ignore_rules
-        self.observer = None
-        self.base_path = os.path.abspath(base_path) if base_path else None
+    """Gerencia operações com arquivos"""
 
-    def collect_files(self, path: str) -> List[Tuple[str, str]]:
-        files = []
-        for root, _, filenames in os.walk(path):
-            for filename in filenames:
-                abs_path = os.path.join(root, filename)
-                rel_path = os.path.relpath(abs_path, path)
-                # Normaliza separadores para forward slash
-                rel_path = rel_path.replace(os.sep, "/")
-                files.append((abs_path, rel_path))
-        return files
+    def __init__(self, base_path: Path) -> None:
+        self.logger = CustomLogger.get_logger(__name__)
+        self.base_path = base_path
+        self.ignore_rules = IgnoreRules()
+        self.observer: Optional[Observer] = None
 
-    def watch_directory(self, path: str, callback) -> None:
-        """Observa mudanças no diretório"""
-        self.observer = Observer()
-        handler = FileChangeHandler(callback, self.ignore_rules)
-        self.observer.schedule(handler, path, recursive=True)
-        self.observer.start()
+    async def start_watching(
+        self, on_change: "Callable[[Path], Awaitable[None]]"
+    ) -> None:
+        """Inicia monitoramento de arquivos"""
+        if self.observer is not None:
+            return
 
         try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            self.stop_watching()
+            self.observer = Observer(emitter_class=PollingObserverVFS)
+            event_handler = AsyncWatchEventHandler(on_change)
+            self.observer.schedule(
+                event_handler, 
+                str(self.base_path), 
+                recursive=True
+            )
+            self.observer.start()
+            self.logger.info(f"Watching directory: {self.base_path}")
+        except Exception as e:
+            self.logger.error(f"Failed to start watching: {e}")
+            self.observer = None
+            raise
 
     def stop_watching(self) -> None:
-        """Para de observar o diretório"""
-        if self.observer:
+        """Para monitoramento de arquivos"""
+        if not self.observer:
+            return
+
+        try:
             self.observer.stop()
             self.observer.join()
+            self.observer = None
+            self.logger.info("Stopped watching")
+        except Exception as e:
+            self.logger.error(f"Failed to stop watching: {e}")
+            raise
+
+    def get_files(self) -> List[Tuple[Path, Path]]:
+        """Retorna lista de arquivos para sincronização"""
+        files: List[Tuple[Path, Path]] = []
+
+        for file_path in self.base_path.rglob("*"):
+            if not file_path.is_file():
+                continue
+
+            if self.ignore_rules.should_ignore(file_path):
+                continue
+
+            rel_path = file_path.relative_to(self.base_path)
+            files.append((file_path, rel_path))
+
+        return files

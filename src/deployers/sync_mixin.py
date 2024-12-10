@@ -1,45 +1,28 @@
+"""
+Mixin para funcionalidades de sincronização
+"""
 from pathlib import Path
+from typing import Protocol, TypeVar
+
+T = TypeVar("T", bound="SyncMixin")
 
 
-class SyncMixin:
-    """Mixin para sincronização de arquivos entre fonte e destino"""
+class SyncMixin(Protocol):
+    """Mixin para sincronização de arquivos"""
 
-    async def sync_files(self, source_path: str, dest_path: str):
-        """
-        Sincroniza arquivos da fonte para o destino
+    async def ensure_remote_dir(self, path: Path) -> None:
+        """Garante existência de diretório remoto"""
+        ...
 
-        Args:
-            source_path: Caminho do diretório fonte
-            dest_path: Caminho do diretório destino
-        """
-        source = Path(source_path)
-        dest = Path(dest_path)
+    async def sync_file(self, source: Path, dest: Path) -> None:
+        """Sincroniza um arquivo"""
+        ...
 
-        if not source.exists():
-            raise FileNotFoundError(f"Diretório fonte não encontrado: {source}")
-
-        # Cria diretório de destino se não existir
+    async def sync_directory(self: T, source: Path, dest: Path) -> None:
+        """Sincroniza um diretório inteiro"""
         await self.ensure_remote_dir(dest)
-
-        # Sincroniza arquivos recursivamente
-        for src_file in source.rglob("*"):
-            if src_file.is_file() and not self._should_ignore(src_file):
-                try:
-                    rel_path = src_file.relative_to(source)
-                    dst_file = dest / rel_path
-
-                    # Verifica se precisa atualizar
-                    should_update = True
-                    if await self.file_exists(dst_file):
-                        src_mtime = src_file.stat().st_mtime
-                        dst_mtime = await self.get_remote_mtime(dst_file)
-                        should_update = src_mtime > dst_mtime
-
-                    if should_update:
-                        await self.ensure_remote_dir(dst_file.parent)
-                        await self._deploy_file(src_file, dst_file)
-                        self.logger.debug(f"Atualizado: {rel_path}")
-
-                except Exception as e:
-                    self.logger.warning(f"Erro ao sincronizar {src_file}: {e}")
-                    continue
+        for item in source.rglob("*"):
+            if item.is_file():
+                rel_path = item.relative_to(source)
+                dest_path = dest / rel_path
+                await self.sync_file(item, dest_path)

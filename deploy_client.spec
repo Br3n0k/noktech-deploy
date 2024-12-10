@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 import sys
+from src.core.constants import PROJECT_NAME
 
 block_cipher = None
 
@@ -85,7 +86,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='noktech-deploy',
+    name=PROJECT_NAME,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

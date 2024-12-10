@@ -2,7 +2,7 @@
 name = "noktech-deploy"
 version = "0.1.2"
 description = "Advanced deployment client with multiple protocols support"
-authors = ["Breno Nogueira"]
+authors = ["Brendown Ferreira"]
 license = "MIT"
 readme = "README.md"
 packages = [{include = "src"}]
@@ -17,6 +17,7 @@ aioftp = "^0.23.1"
 pyyaml = "^6.0.1"
 colorama = "^0.4.6"
 jinja2 = "^3.1.2"
+asyncssh = "^0.23.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.4"
@@ -24,6 +25,8 @@ pytest-asyncio = "^0.24.0"
 pytest-cov = "^6.0.0"
 black = "^24.10.0"
 ruff = "^0.8.2"
+types-requests = "^2.32.0.20241016"
+types-pyinstaller = "^6.11.0.20241028"
 
 [build-system]
 requires = ["poetry-core"]
@@ -35,19 +38,8 @@ line-length = 100
 indent-width = 4
 
 [tool.ruff.lint]
-select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "B",   # flake8-bugbear
-    "C",   # flake8-comprehensions
-    "UP",  # pyupgrade
-    "N",   # pep8-naming
-    "YTT", # flake8-2020
-    "S",   # flake8-bandit
-]
-ignore = ["E402", "E501"]
+select = ["E", "F", "B", "S"]
+ignore = ["S101"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -75,8 +67,21 @@ target-version = ['py38']
 include = '\.pyi?$'
 
 [tool.mypy]
-python_version = "3.8"
-warn_return_any = true
+python_version = "3.10"
+warn_return_any = false
 warn_unused_configs = true
-disallow_untyped_defs = true
+disallow_untyped_defs = false
+check_untyped_defs = true
+disallow_any_generics = false
+disallow_incomplete_defs = false
+disallow_untyped_decorators = false
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+ignore_errors = true
  

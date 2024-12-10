@@ -1,38 +1,30 @@
-import os
+from pathlib import Path
+from typing import List, Optional
 import fnmatch
+from src.core.constants import DEFAULT_IGNORE_PATTERNS
 
 
 class IgnoreRules:
-    DEFAULT_RULES = [
-        ".git/*",
-        "__pycache__/*",
-        "*.pyc",
-        ".env",
-        ".venv/*",
-        "node_modules/*",
-    ]
+    """Gerencia regras de ignorar arquivos"""
 
-    def __init__(self, rules=None, ignore_file=None):
-        self.rules = list(self.DEFAULT_RULES)
-        if rules:
-            self.rules.extend(rules)
-        if ignore_file and os.path.exists(ignore_file):
-            with open(ignore_file) as f:
-                self.rules.extend(line.strip() for line in f)
+    def __init__(self, patterns: Optional[List[str]] = None) -> None:
+        self.patterns = patterns or DEFAULT_IGNORE_PATTERNS
+        self._compile_patterns()
 
-    def should_ignore(self, path: str) -> bool:
-        path = path.replace("\\", "/")
+    def _compile_patterns(self) -> None:
+        """Compila os padrões de ignore"""
+        # Mantém os padrões originais para referência
+        self._original_patterns = self.patterns
+        
+        # Converte padrões para lowercase para comparação case-insensitive
+        self._compiled_patterns = [pattern.lower() for pattern in self.patterns]
 
-        # Primeiro verifica regras de negação
-        for rule in self.rules:
-            if rule.startswith("!"):
-                if fnmatch.fnmatch(path, rule[1:]):
-                    return False
-
-        # Depois verifica regras normais
-        for rule in self.rules:
-            if not rule.startswith("!"):
-                if fnmatch.fnmatch(path, rule):
-                    return True
-
+    def should_ignore(self, path: Path) -> bool:
+        """Verifica se um arquivo deve ser ignorado"""
+        path_str = str(path).lower()
+        
+        for pattern in self._compiled_patterns:
+            if fnmatch.fnmatch(path_str, pattern):
+                return True
+                
         return False

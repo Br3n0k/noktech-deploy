@@ -1,65 +1,84 @@
-import asyncio
-from typing import Dict
+from __future__ import annotations
 from pathlib import Path
-from src.core.watcher import DirectoryWatcher
-from src.utils.logger import Logger
-from src.i18n import I18n
-from src.core.deploy_manager import DeployManager
+from typing import Dict, Any, Optional, Union, Awaitable, Callable, TYPE_CHECKING
+import asyncio
+from watchdog.events import FileSystemEventHandler, FileModifiedEvent, DirModifiedEvent
+from watchdog.observers.api import BaseObserver as Observer
+from watchdog.observers.polling import PollingObserverVFS
+
+from src.utils.logger import CustomLogger
+from src.core.constants import (
+    WATCH_RECURSIVE,
+    WATCH_OBSERVER_CLASS,
+    WATCH_PATTERNS,
+    WATCH_DELAY,
+    WATCH_INTERVAL
+)
+
+if TYPE_CHECKING:
+    from src.core.deploy_manager import DeployManager
+
+
+class AsyncWatchEventHandler(FileSystemEventHandler):
+    def __init__(self, on_change: Callable[[Path], Awaitable[None]]) -> None:
+        super().__init__()
+        self.on_change = on_change
+        self.logger = CustomLogger.get_logger(__name__)
+
+    async def _handle_change(self, path: Path) -> None:
+        try:
+            await self.on_change(path)
+        except Exception as e:
+            self.logger.error(f"Error processing file change: {e}")
+
+    def on_modified(self, event: Union[DirModifiedEvent, FileModifiedEvent]) -> None:
+        if not isinstance(event, (DirModifiedEvent, FileModifiedEvent)) or event.is_directory:
+            return
+
+        asyncio.create_task(self._handle_change(Path(event.src_path)))
+
 
 class WatchManager:
-    def __init__(self, deploy_manager: DeployManager):
-        self.logger = Logger(__name__)
-        self.i18n = I18n()
+    def __init__(self, config: Dict[str, Any], deploy_manager: DeployManager) -> None:
+        self.logger = CustomLogger.get_logger(__name__)
+        self.config = config
         self.deploy_manager = deploy_manager
-        self.watchers: Dict[str, DirectoryWatcher] = {}
-        self.running = False
-        
-    async def start_watchers(self, config: dict) -> None:
-        """Inicia observadores para hosts habilitados"""
-        self.running = True
-        
-        for host_name, host_config in config["hosts"].items():
-            if not host_config.get("enabled", False):
-                continue
-                
-            watch_config = host_config.get("watch", {})
-            if not watch_config.get("enabled", False):
-                continue
+        self.observer: Optional[Observer] = None
+        self.handler = AsyncWatchEventHandler(self.deploy_manager.sync_file)
 
-            try:
-                self.logger.info(self.i18n.get("watch.starting").format(host_name))
-                
-                watcher = DirectoryWatcher(
-                    path=Path(host_config["source_path"]),
-                    patterns=watch_config.get("patterns", ["*"]),
-                    ignore_patterns=watch_config.get("ignore_patterns", []),
-                    interval=watch_config.get("interval", 1.0)
-                )
-                
-                self.watchers[host_name] = watcher
-                asyncio.create_task(self._watch_host(host_name, watcher))
-                
-            except Exception as e:
-                self.logger.error(self.i18n.get("watch.error.config").format(str(e)))
+    async def start_watch(self) -> None:
+        if self.observer:
+            return
 
-    async def _watch_host(self, host_name: str, watcher: DirectoryWatcher) -> None:
-        """Processa alterações para um host específico"""
         try:
-            async for changes in watcher.watch():
-                if not self.running:
-                    break
-                    
-                if changes:
-                    self.logger.info(self.i18n.get("watch.changes_detected").format(
-                        len(changes), host_name))
-                    await self.deploy_manager.deploy_changes(host_name, changes)
-                    
+            observer_class = globals().get(WATCH_OBSERVER_CLASS, PollingObserverVFS)
+            self.observer = Observer(emitter_class=observer_class)
+            watch_path = Path(self.config.get("source_path", "."))
+            
+            self.observer.schedule(
+                self.handler, 
+                str(watch_path), 
+                recursive=WATCH_RECURSIVE
+            )
+            
+            self.observer.start()
+            await asyncio.sleep(WATCH_DELAY)  # Aguarda inicialização
+            self.logger.info(f"Started watching directory: {watch_path}")
+            
         except Exception as e:
-            self.logger.error(self.i18n.get("watch.error.monitor").format(str(e)))
+            self.logger.error(f"Failed to start watching: {e}")
+            self.observer = None
+            raise
 
-    async def stop_watchers(self) -> None:
-        """Para todos os watchers ativos"""
-        self.running = False
-        for host_name, watcher in self.watchers.items():
-            await watcher.stop()
-            self.logger.info(self.i18n.get("watch.stopped").format(host_name)) 
+    async def stop_watch(self) -> None:
+        if not self.observer:
+            return
+
+        try:
+            self.observer.stop()
+            self.observer.join(timeout=WATCH_INTERVAL)
+            self.observer = None
+            self.logger.info("Stopped watching")
+        except Exception as e:
+            self.logger.error(f"Failed to stop watching: {e}")
+            raise

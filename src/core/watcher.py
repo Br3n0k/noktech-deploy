@@ -1,68 +1,104 @@
+"""
+Sistema de monitoramento de arquivos
+"""
 import asyncio
 from pathlib import Path
-from typing import List, AsyncGenerator
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler, FileSystemEvent
+from typing import Set, Dict, Any, Optional
+import time
+from watchdog.observers import Observer  # type: ignore
+from watchdog.events import FileSystemEventHandler, FileSystemEvent  # type: ignore
 
-class DirectoryWatcher:
-    def __init__(self, path: Path, patterns: List[str] = None, 
-                 ignore_patterns: List[str] = None, interval: float = 1.0):
-        self.path = str(path)
-        self.patterns = patterns or ["*"]
-        self.ignore_patterns = ignore_patterns or []
-        self.interval = interval
-        self.observer = None
-        self.running = False
-        self.changes: List[str] = []
-        self._change_event = asyncio.Event()
+from src.utils.logger import CustomLogger
+from src.i18n import I18n
+from src.deployers.base_deployer import BaseDeployer
 
-    def _on_change(self, event: FileSystemEvent):
-        """Callback para eventos de alteração"""
+
+class DeployEventHandler(FileSystemEventHandler):
+    """Handler para eventos de sistema de arquivos"""
+
+    def __init__(self, watcher: "FileWatcher"):
+        self.watcher = watcher
+        self.logger = CustomLogger.get_logger(__name__)
+        self._cooldown = 1.0  # segundos
+        self._last_event: Dict[str, float] = {}
+
+    def on_any_event(self, event: FileSystemEvent) -> None:
+        """Processa qualquer evento do sistema de arquivos"""
         if event.is_directory:
             return
-            
-        # Verifica se o arquivo corresponde aos padrões
-        file_path = event.src_path
-        if any(p in file_path for p in self.ignore_patterns):
-            return
-            
-        if file_path not in self.changes:
-            self.changes.append(file_path)
-            self._change_event.set()
 
-    async def watch(self) -> AsyncGenerator[List[str], None]:
-        """Gera lista de arquivos alterados"""
-        if not self.running:
-            await self.start()
-            
-        while self.running:
-            await self._change_event.wait()
-            changes = self.changes.copy()
-            self.changes.clear()
-            self._change_event.clear()
-            yield changes
-            await asyncio.sleep(self.interval)
+        # Evita eventos duplicados usando cooldown
+        current_time = time.time()
+        if event.src_path in self._last_event:
+            if current_time - self._last_event[event.src_path] < self._cooldown:
+                return
 
-    async def start(self):
-        """Inicia o monitoramento do diretório"""
-        if self.running:
-            return
-        
+        self._last_event[event.src_path] = current_time
+        self.watcher.queue_change(Path(event.src_path))
+
+
+class FileWatcher:
+    """Gerenciador de monitoramento de arquivos"""
+
+    def __init__(self, deployer: BaseDeployer):
+        self.logger = CustomLogger.get_logger(__name__)
+        self.i18n = I18n()
+        self.deployer = deployer
         self.observer = Observer()
-        event_handler = FileSystemEventHandler()
-        event_handler.on_modified = self._on_change
-        event_handler.on_created = self._on_change
-        
-        self.observer.schedule(event_handler, self.path, recursive=True)
-        self.observer.start()
-        self.running = True
+        self.handler = DeployEventHandler(self)
+        self._pending_changes: Set[Path] = set()
+        self._running = False
+        self._process_lock = asyncio.Lock()
 
-    async def stop(self):
-        """Para o monitoramento do diretório"""
-        if not self.running:
-            return
-        
+    def queue_change(self, path: Path) -> None:
+        """Adiciona arquivo à fila de mudanças"""
+        self._pending_changes.add(path)
+
+    async def start(self, path: Path) -> None:
+        """Inicia monitoramento"""
+        try:
+            self.logger.info(self.i18n.get("watch.started").format(path))
+            self.observer.schedule(self.handler, str(path), recursive=True)
+            self.observer.start()
+            self._running = True
+
+            while self._running:
+                await self._process_changes()
+                await asyncio.sleep(1)
+
+        except Exception as e:
+            self.logger.error(self.i18n.get("watch.error").format(path, e))
+            raise
+        finally:
+            await self.stop()
+
+    async def stop(self) -> None:
+        """Para monitoramento"""
+        self._running = False
         self.observer.stop()
         self.observer.join()
-        self.running = False
-        self._change_event.set()  # Libera qualquer wait pendente
+        self.logger.info(self.i18n.get("watch.stopped").format(self.deployer.source_path))
+
+    async def _process_changes(self) -> None:
+        """Processa arquivos modificados"""
+        if not self._pending_changes:
+            return
+
+        async with self._process_lock:
+            try:
+                files = list(self._pending_changes)
+                self._pending_changes.clear()
+
+                if files:
+                    self.logger.info(
+                        self.i18n.get("watch.changes_detected").format(
+                            len(files),
+                            self.deployer.host_name
+                        )
+                    )
+                    await self.deployer.deploy_files(files)
+
+            except Exception as e:
+                self.logger.error(
+                    self.i18n.get("watch.error.monitor").format(str(e))
+                )

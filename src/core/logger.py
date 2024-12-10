@@ -1,41 +1,55 @@
 import logging
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+from src.core.constants import (
+    LOGS_DIR,
+    LOG_FILE_FORMAT,
+    LOG_FILE_ENCODING,
+    LOG_LEVEL,
+    LOG_FORMAT
+)
 
 
 class Logger:
-    def __init__(self, name: str = "noktech-deploy"):
+    """Logger base do sistema"""
+    
+    def __init__(self, name: str = "noktech-deploy") -> None:
         self.logger = logging.getLogger(name)
         if not self.logger.handlers:
             self._setup_logger()
 
-    def _setup_logger(self):
+    def _setup_logger(self) -> None:
+        """Configura handlers e formatters do logger"""
+        # Garante que o diretório de logs existe
+        LOGS_DIR.mkdir(parents=True, exist_ok=True)
+
         # Configura log em arquivo
-        log_dir = Path.cwd() / "logs"
-        log_dir.mkdir(exist_ok=True)
-        
-        log_file = log_dir / f"noktech_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-        file_handler = logging.FileHandler(log_file, encoding='utf-8')
-        file_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-        file_handler.setFormatter(file_formatter)
-        
+        log_file = LOGS_DIR / datetime.now().strftime(LOG_FILE_FORMAT)
+        file_handler = logging.FileHandler(log_file, encoding=LOG_FILE_ENCODING)
+        file_handler.setFormatter(logging.Formatter(LOG_FORMAT["file"]))
+
         # Configura log no console
         console_handler = logging.StreamHandler()
-        console_formatter = logging.Formatter("%(levelname)s: %(message)s")
-        console_handler.setFormatter(console_formatter)
-        
+        console_handler.setFormatter(logging.Formatter(LOG_FORMAT["console"]))
+
+        # Configura o logger
         self.logger.addHandler(file_handler)
         self.logger.addHandler(console_handler)
-        self.logger.setLevel(logging.INFO)
+        self.logger.setLevel(getattr(logging, LOG_LEVEL))
 
-    def info(self, message: str):
+    def info(self, message: str) -> None:
         self.logger.info(message)
 
-    def error(self, message: str):
+    def error(self, message: str) -> None:
         self.logger.error(message)
 
-    def debug(self, message: str):
+    def debug(self, message: str) -> None:
         self.logger.debug(message)
 
-    def warning(self, message: str):
+    def warning(self, message: str) -> None:
         self.logger.warning(message)
+
+    @classmethod
+    def get_logger(cls, name: str) -> "Logger":
+        """Retorna uma instância do logger"""
+        return cls(name)

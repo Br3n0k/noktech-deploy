@@ -1,3 +1,3 @@
 from PyInstaller.utils.hooks import collect_all
 
-datas, binaries, hiddenimports = collect_all('aioftp') 
+datas, binaries, hiddenimports = collect_all("aioftp")

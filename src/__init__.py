@@ -6,6 +6,16 @@ diferentes protocolos como SSH, FTP e local, com suporte a monitoramento
 de alterações em tempo real.
 """
 
-__version__ = "1.0.0"
-__author__ = "Breno Nogueira"
-__email__ = "breno.nogueira@noktech.com.br"
+from src.core.constants import (
+    PROJECT_VERSION,
+    PROJECT_AUTHOR,
+    PROJECT_EMAIL,
+    PROJECT_DESCRIPTION,
+    PROJECT_COPYRIGHT
+)
+
+__version__ = PROJECT_VERSION
+__author__ = PROJECT_AUTHOR
+__email__ = PROJECT_EMAIL
+__description__ = PROJECT_DESCRIPTION
+__copyright__ = PROJECT_COPYRIGHT

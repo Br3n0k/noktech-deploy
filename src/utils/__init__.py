@@ -1,4 +1,3 @@
-from .logger import Logger
-from .config import Config
+from .config import ConfigManager
 
-__all__ = ["Logger", "Config"]
+__all__ = ["ConfigManager"]

@@ -1,78 +1,60 @@
-import getpass
-from typing import Dict, Any
-from src.utils.logger import Logger
+"""
+Configuração interativa
+"""
+from typing import Dict, Optional
+import inquirer  # type: ignore
+from pathlib import Path
+
 from src.i18n import I18n
+from src.utils.logger import CustomLogger
+
 
 class InteractiveConfig:
+    """Classe para criar configuração interativamente"""
+
     def __init__(self):
-        self.logger = Logger(__name__)
+        self.logger = CustomLogger.get_logger(__name__)
         self.i18n = I18n()
-        
-    def get_config(self) -> dict[str, Any]:
-        """Obtém configuração via modo interativo"""
-        print("\n" + self.i18n.get("mode.interactive"))
-        
-        # Protocolo
-        print("\n" + self.i18n.get("protocol.select"))
-        print("1. " + self.i18n.get("protocol.ssh"))
-        print("2. " + self.i18n.get("protocol.ftp"))
-        print("3. " + self.i18n.get("protocol.local"))
-        print("0. " + self.i18n.get("menu.exit"))
-        
-        choice = input(f"\n{self.i18n.get('input.choice')}: ")
-        
-        if choice == "0":
+
+    async def create_config(self) -> Optional[Dict]:
+        """Cria configuração interativamente"""
+        questions = [
+            inquirer.Text("host", message=self.i18n.get("input.host")),
+            inquirer.List(
+                "protocol",
+                message=self.i18n.get("protocol.select"),
+                choices=["ssh", "ftp", "local"]
+            ),
+            inquirer.Text("user", message=self.i18n.get("input.user")),
+            inquirer.Password("password", message=self.i18n.get("input.password")),
+            inquirer.Path(
+                "source",
+                message=self.i18n.get("input.source_path"),
+                path_type=inquirer.Path.DIRECTORY
+            ),
+            inquirer.Path(
+                "dest",
+                message=self.i18n.get("input.dest_path"),
+                path_type=inquirer.Path.DIRECTORY
+            ),
+        ]
+
+        answers = inquirer.prompt(questions)
+        if not answers:
+            self.logger.warning("Configuração interativa cancelada")
             return None
-            
-        protocol = {
-            "1": "ssh",
-            "2": "ftp",
-            "3": "local"
-        }.get(choice)
-        
-        if not protocol:
-            self.logger.error(self.i18n.get("deploy.error.protocol").format(choice))
-            return None
-            
-        # Caminhos
-        source_path = input(f"\n{self.i18n.get('input.source_path')} ")
-        dest_path = input(f"{self.i18n.get('input.dest_path')} ")
-        
-        config = {
-            "protocol": protocol,
-            "source_path": source_path,
-            "dest_path": dest_path,
-            "enabled": True
-        }
-        
-        # Configurações específicas do protocolo
-        if protocol in ["ssh", "ftp"]:
-            config.update({
-                "host": input(f"{self.i18n.get('input.host')} "),
-                "user": input(f"{self.i18n.get('input.user')} "),
-                "password": getpass.getpass(f"{self.i18n.get('input.password')} ")
-            })
-            
-            if protocol == "ssh":
-                key_path = input(f"{self.i18n.get('input.key_path')} ")
-                if key_path:
-                    config["key_path"] = key_path
-                    
-            port_default = "22" if protocol == "ssh" else "21"
-            port = input(f"{self.i18n.get('input.port').format(port_default)} ")
-            if port:
-                config["port"] = int(port)
-                
-        # Configuração de watch
-        watch = input(f"\n{self.i18n.get('input.watch')} ").lower()
-        if watch in ["s", "y", "sim", "yes"]:
-            config["watch"] = {
-                "enabled": True,
-                "ignore_patterns": []
-            }
-            
+
+        self.logger.info("Configuração interativa criada com sucesso")
         return {
             "hosts": {
-                "interactive": config
+                answers["host"]: {
+                    "enabled": True,
+                    "protocol": answers["protocol"],
+                    "host": answers["host"],
+                    "user": answers["user"],
+                    "password": answers["password"],
+                    "source_path": str(Path(answers["source"])),
+                    "dest_path": str(Path(answers["dest"])),
+                }
             }
-        } 
+        }

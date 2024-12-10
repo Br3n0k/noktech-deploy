@@ -1,72 +1,77 @@
-#!/usr/bin/env python
-import sys
+#!/usr/bin/env python3
+"""
+Ponto de entrada principal do NokTech Deploy
+"""
+import argparse
 import asyncio
-import logging
-import traceback
-from src.deploy_client import DeployClient
+import sys
+from typing import Optional, Dict, Any
 from pathlib import Path
-from datetime import datetime
+
+from src.deploy_client import DeployClient
+from src.utils.config import ConfigManager
+from src.utils.logger import CustomLogger
 from src.i18n import I18n
-from src.core.logger import Logger
-from src.utils.config import create_default_config
+from src.core.constants import (
+    PROJECT_NAME,
+    PROJECT_VERSION,
+    DEFAULT_CONFIG_FILE
+)
 
 
-def handle_exception(exc_type, exc_value, exc_traceback):
-    """Manipulador global de exceções não tratadas"""
-    if issubclass(exc_type, KeyboardInterrupt):
-        sys.__excepthook__(exc_type, exc_value, exc_traceback)
-        return
-
-    i18n = I18n()
-    logger = Logger()
-    error_msg = "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
-    logger.error(error_msg)
-
-    print(i18n.get("app.error.fatal").format(str(exc_value)))
-    print(i18n.get("app.error_details").format(error_msg))
-    input(i18n.get("app.press_enter"))
+def validate_config(config: Dict[str, Any]) -> None:
+    """Valida configuração básica"""
+    required_fields = ["source_path", "dest_path"]
+    for field in required_fields:
+        if field not in config:
+            raise ValueError(f"Missing required field: {field}")
+        if not Path(config[field]).exists():
+            raise ValueError(f"Path does not exist: {config[field]}")
 
 
-def initialize_workspace():
-    """Inicializa o ambiente de trabalho na raiz onde o programa foi executado"""
+async def main(config_file: Optional[str] = None, watch: bool = False) -> None:
+    """Função principal do programa"""
+    print(f"{PROJECT_NAME} v{PROJECT_VERSION}")
+    logger = CustomLogger.get_logger(__name__)
+    
     try:
-        current_dir = Path.cwd()
-        log_dir = current_dir / "logs"
+        client = DeployClient()
+        config_manager = ConfigManager(config_file or DEFAULT_CONFIG_FILE)
+        config = config_manager.load_config()
         
-        # Configura logging
-        log_dir.mkdir(exist_ok=True)
+        # Valida configuração antes de prosseguir
+        validate_config(config)
         
-        # Configura arquivo de log inicial com encoding UTF-8
-        error_log = log_dir / f"error_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-        file_handler = logging.FileHandler(error_log, encoding='utf-8')
-        file_handler.setFormatter(
-            logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-        )
-        logging.getLogger().addHandler(file_handler)
-        
-        # Cria config.json se não existir
-        if not (current_dir / "config.json").exists():
-            create_default_config(current_dir / "config.json")
+        if watch:
+            config["watch"] = {"enabled": True}
             
-        return True
+        await client.setup(config)
+        await client.run()
+    except KeyboardInterrupt:
+        logger.info("Operation cancelled by user")
+        sys.exit(0)
+    except ValueError as e:
+        logger.error(f"Configuration error: {str(e)}")
+        sys.exit(1)
+    except FileNotFoundError as e:
+        logger.error(f"File not found: {str(e)}")
+        sys.exit(1)
     except Exception as e:
-        logging.error(f"Erro ao inicializar workspace: {str(e)}")
-        return False
+        logger.error(f"Unexpected error: {str(e)}")
+        sys.exit(1)
 
 
-def main():
-    """Função principal"""
-    sys.excepthook = handle_exception
-    logging.basicConfig(level=logging.INFO)
-
-    if not initialize_workspace():
-        return 1
-
-    client = DeployClient()
-    parser = client.create_parser()
+def cli():
+    """Interface de linha de comando"""
+    i18n = I18n()
+    parser = argparse.ArgumentParser(description=i18n.get("app.description"))
+    parser.add_argument("--config", "-c", help=i18n.get("input.config"))
+    parser.add_argument("--watch", "-w", action="store_true", help=i18n.get("input.watch"))
+    parser.add_argument("--version", "-v", action="version", version=f"{PROJECT_NAME} v{PROJECT_VERSION}")
+    
     args = parser.parse_args()
-    return asyncio.run(client.run(args))
+    asyncio.run(main(args.config, args.watch))
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    cli()
