@@ -1,77 +1,50 @@
 from abc import ABC, abstractmethod
-from typing import Optional
-import os
-from src.core.ignore_rules import IgnoreRules
-from src.core.logger import Logger
-
+from pathlib import Path
+from typing import Dict, Any, List
+from src.utils.logger import Logger
 
 class BaseDeployer(ABC):
-    def __init__(
-        self,
-        host: Optional[str] = None,
-        user: Optional[str] = None,
-        password: Optional[str] = None,
-        port: int = 22,
-    ):
-        self.host = host
-        self.user = user
-        self.password = password
-        self.port = port
-        self.ignore_rules: Optional[IgnoreRules] = None
-        self.logger = Logger()
-        self.overwrite_existing = True
-
-    def set_overwrite_mode(self, overwrite: bool):
-        """Define se arquivos existentes devem ser sobrescritos"""
-        self.overwrite_existing = overwrite
-
-    async def deploy_file(self, local_path: str, remote_path: str):
-        """Verifica existência antes de fazer upload"""
-        if not self.overwrite_existing:
-            if await self.file_exists(remote_path):
-                return  # Pula arquivo existente
-
-        await self._deploy_file(local_path, remote_path)
-
-    @abstractmethod
-    async def file_exists(self, remote_path: str) -> bool:
-        """Verifica se arquivo existe no destino"""
-        pass
-
-    @abstractmethod
-    async def _deploy_file(self, local_path: str, remote_path: str) -> None:
-        """Implementação específica do deploy de um arquivo"""
-        pass
+    def __init__(self, config: Dict[str, Any]):
+        self.config = config
+        self.logger = Logger(__name__)
+        self.source_path = Path(config.get("source_path", "."))
+        self.dest_path = config.get("dest_path", "")
+        self.ignore_patterns = config.get("ignore_patterns", [])
 
     @abstractmethod
     async def connect(self) -> None:
-        """Estabelece conexão com o servidor"""
+        """Estabelece conexão com o destino"""
         pass
 
     @abstractmethod
     async def disconnect(self) -> None:
-        """Encerra conexão com o servidor"""
+        """Encerra a conexão com o destino"""
         pass
 
     @abstractmethod
-    async def ensure_remote_dir(self, path: str) -> None:
-        """Garante que o diretório remoto existe"""
+    async def upload_file(self, source: Path, dest: str) -> None:
+        """Faz upload de um arquivo para o destino"""
         pass
 
-    @abstractmethod
-    async def handle_change(self, path: str, event_type: str) -> None:
-        """Manipula mudanças em arquivos no modo watch"""
-        pass
+    async def deploy(self) -> None:
+        """Executa o deploy completo"""
+        try:
+            await self.connect()
+            await self._deploy_files()
+            await self.disconnect()
+        except Exception as e:
+            self.logger.error(f"Erro durante deploy: {str(e)}")
+            raise
 
-    async def deploy_files(self, source_path: str, dest_path: str) -> None:
-        """Deploy de múltiplos arquivos"""
-        for root, _, files in os.walk(source_path):
-            for file in files:
-                local_path = os.path.join(root, file)
-                relative_path = os.path.relpath(local_path, source_path)
-                remote_path = os.path.join(dest_path, relative_path).replace("\\", "/")
+    async def _deploy_files(self) -> None:
+        """Faz deploy de todos os arquivos"""
+        for file in self.source_path.rglob("*"):
+            if file.is_file() and not await self.should_ignore(file):
+                rel_path = file.relative_to(self.source_path)
+                dest = f"{self.dest_path}/{str(rel_path).replace(chr(92), '/')}"
+                await self.upload_file(file, dest)
 
-                if self.ignore_rules and self.ignore_rules.should_ignore(relative_path):
-                    continue
-
-                await self._deploy_file(local_path, remote_path)
+    async def should_ignore(self, file: Path) -> bool:
+        """Verifica se um arquivo deve ser ignorado"""
+        from fnmatch import fnmatch
+        return any(fnmatch(str(file), pattern) for pattern in self.ignore_patterns)

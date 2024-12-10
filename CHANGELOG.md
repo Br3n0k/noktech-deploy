@@ -2,7 +2,6 @@
 
 ## [0.1.2] - 2024-03-08
 
-### Adicionado
 - Sistema de verificação automática de versão
   - Comparação com versão remota do repositório
   - Logs de divergência de versão
@@ -13,14 +12,12 @@
 - Documentação da funcionalidade de versão
 - Documentação completa
 
-### Modificado
 - Estrutura de diretórios do projeto
 - Sistema de logs separado por funcionalidade
 - Atualização da documentação
 
 ## [0.1.1] - 2024-03-07
 
-### Adicionado
 - Suporte a Windows
 - Suporte a Linux
 - Suporte a MacOS
@@ -31,7 +28,6 @@
 
 ## [0.1.0] - 2024-03-01
 
-### Adicionado
 - Implementação inicial do cliente de deploy
 - Suporte a protocolos SSH/SFTP, FTP e Local
 - Sistema de observação de mudanças em tempo real
@@ -42,9 +38,10 @@
 - Suite de testes
 
 ### Próximas Versões
+
 - Suporte a mais protocolos (S3, FTPS, etc)
 - Interface gráfica
 - Compressão de arquivos
 - Deploy incremental
 - Rollback automático
-- Hooks pré/pós deploy 
+- Hooks pré/pós deploy

@@ -1,44 +1,75 @@
-import os
+import logging
+import sys
 from datetime import datetime
 from pathlib import Path
-
+from typing import Optional
+from src.core.constants import DEFAULT_LOG_DIR, LOG_FILE_FORMAT
+from src.i18n import I18n
 
 class Logger:
-    def __init__(self, log_file: str = None, log_level: str = "INFO"):
-        self.log_file = log_file or self.get_default_log_file()
-        self.log_level = log_level.upper()
-        os.makedirs(os.path.dirname(self.log_file), exist_ok=True)
+    _instances = {}
+    _initialized = False
+    _i18n = I18n()
 
-    @staticmethod
-    def get_default_log_file() -> str:
-        """Retorna o caminho padrão do arquivo de log"""
-        log_dir = Path.home() / ".noktech-deploy" / "logs"
-        return str(log_dir / f"deploy-{datetime.now():%Y-%m}.log")
+    def __new__(cls, name: str):
+        if name not in cls._instances:
+            cls._instances[name] = super().__new__(cls)
+        return cls._instances[name]
 
-    def should_log(self, level: str) -> bool:
-        """Verifica se o nível deve ser logado"""
-        levels = {"DEBUG": 0, "INFO": 1, "WARNING": 2, "ERROR": 3}
-        return levels.get(level.upper(), 0) >= levels.get(self.log_level, 0)
+    def __init__(self, name: str):
+        if not hasattr(self, 'logger'):
+            self.logger = logging.getLogger(name)
+            
+            if not Logger._initialized:
+                self._setup_logging()
+                Logger._initialized = True
 
-    def log(self, message: str, level: str = "INFO"):
-        """Registra mensagem no log se nível permitir"""
-        if not self.should_log(level):
-            return
+    def _setup_logging(self):
+        """Configura o sistema de logging"""
+        try:
+            # Cria diretório de logs
+            DEFAULT_LOG_DIR.mkdir(parents=True, exist_ok=True)
+            
+            # Nome do arquivo de log
+            log_file = DEFAULT_LOG_DIR / LOG_FILE_FORMAT.format(
+                datetime.now().strftime("%Y%m%d_%H%M%S"))
+            
+            # Configura formato
+            formatter = logging.Formatter(
+                '%(asctime)s - %(levelname)s - %(message)s',
+                datefmt='%Y-%m-%d %H:%M:%S'
+            )
+            
+            # Handler para arquivo
+            file_handler = logging.FileHandler(log_file, encoding='utf-8')
+            file_handler.setFormatter(formatter)
+            
+            # Handler para console
+            console_handler = logging.StreamHandler(sys.stdout)
+            console_handler.setFormatter(formatter)
+            
+            # Configura root logger
+            root_logger = logging.getLogger()
+            root_logger.setLevel(logging.INFO)
+            root_logger.addHandler(file_handler)
+            root_logger.addHandler(console_handler)
+            
+        except Exception as e:
+            print(self._i18n.get("app.error.fatal").format(
+                f"Erro ao configurar logging: {str(e)}"))
+            sys.exit(1)
 
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        log_entry = f"[{timestamp}] {level}: {message}\n"
+    def debug(self, msg: str):
+        self.logger.debug(msg)
 
-        with open(self.log_file, "a", encoding="utf-8") as f:
-            f.write(log_entry)
+    def info(self, msg: str):
+        self.logger.info(msg)
 
-    def info(self, message: str):
-        self.log(message, "INFO")
+    def warning(self, msg: str):
+        self.logger.warning(msg)
 
-    def error(self, message: str):
-        self.log(message, "ERROR")
+    def error(self, msg: str):
+        self.logger.error(msg)
 
-    def warning(self, message: str):
-        self.log(message, "WARNING")
-
-    def debug(self, message: str):
-        self.log(message, "DEBUG")
+    def critical(self, msg: str):
+        self.logger.critical(msg)

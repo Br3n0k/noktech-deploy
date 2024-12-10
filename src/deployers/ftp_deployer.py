@@ -1,91 +1,46 @@
-from typing import Optional
-from ftplib import FTP, error_perm
 import os
+import aioftp
 from pathlib import Path
 from .base_deployer import BaseDeployer
-import asyncio
 
 
 class FTPDeployer(BaseDeployer):
-    def __init__(
-        self,
-        host: str,
-        user: str,
-        password: Optional[str] = None,
-        port: int = 21,
-        dest_path: str = "",
-    ):
-        super().__init__(host=host, user=user, password=password, port=port)
-        self.ftp: Optional[FTP] = None
-        self.dest_path = dest_path
+    def __init__(self, config: dict):
+        super().__init__(config)
+        self.client = None
 
     async def connect(self) -> None:
-        """Conecta ao servidor FTP"""
+        """Estabelece conexão FTP"""
         try:
-
-            def _connect():
-                ftp = FTP()
-                ftp.connect(self.host, self.port)
-                ftp.login(self.user, self.password or "")
-                return ftp
-
-            self.ftp = await asyncio.get_event_loop().run_in_executor(None, _connect)
+            self.client = aioftp.Client()
+            await self.client.connect(
+                self.config["host"],
+                port=self.config.get("port", 21)
+            )
+            await self.client.login(
+                self.config["user"],
+                self.config.get("password", "")
+            )
         except Exception as e:
-            self.ftp = None
-            raise ConnectionError(f"Erro ao conectar ao FTP: {str(e)}")
+            raise ConnectionError(f"Falha na conexão FTP: {str(e)}")
 
     async def disconnect(self) -> None:
-        if self.ftp:
-            self.ftp.quit()
+        """Fecha conexão FTP"""
+        if hasattr(self, 'client'):
+            await self.client.quit()
 
-    async def ensure_remote_dir(self, path: str) -> None:
-        if not self.ftp:
-            raise ConnectionError("FTP não conectado")
-
-        parts = path.split("/")
-        current = ""
-
-        for part in parts:
-            if not part:
-                continue
-            current = f"{current}/{part}"
-            try:
-                self.ftp.mkd(current)
-            except error_perm:
-                pass  # Diretório já existe
-
-    async def file_exists(self, remote_path: str) -> bool:
-        if not self.ftp:
-            raise ConnectionError("FTP não conectado")
+    async def upload_file(self, source: Path, dest: str) -> None:
+        """Upload de arquivo via FTP"""
         try:
-            self.ftp.size(remote_path)
-            return True
-        except self.ftp.error_perm:
-            return False
-
-    async def _deploy_file(self, local_path: str, remote_path: str):
-        if not self.ftp:
-            raise ConnectionError("FTP não conectado")
-
-        remote_dir = os.path.dirname(remote_path)
-        if remote_dir:
-            await self.ensure_remote_dir(remote_dir)
-
-        with open(local_path, "rb") as f:
-            self.ftp.storbinary(f"STOR {remote_path}", f)
-
-    async def handle_change(self, path: str, event_type: str) -> None:
-        if not self.ftp:
-            raise ConnectionError("FTP não conectado")
-
-        try:
-            relative_path = os.path.relpath(path)
-            remote_path = os.path.join(self.dest_path, relative_path).replace("\\", "/")
-
-            if event_type in ("created", "modified"):
-                await self.ensure_remote_dir(str(Path(remote_path).parent))
-                await self._deploy_file(path, remote_path)
-            elif event_type == "deleted":
-                self.ftp.delete(remote_path)
+            await self._ensure_remote_dir(str(Path(dest).parent))
+            await self.client.upload(str(source), dest)
         except Exception as e:
-            raise Exception(f"Erro ao processar mudança: {str(e)}")
+            self.logger.error(f"Erro no upload do arquivo {source}: {str(e)}")
+            raise
+
+    async def _ensure_remote_dir(self, path: str) -> None:
+        """Garante que o diretório remoto existe"""
+        try:
+            await self.client.make_directory(path, parents=True)
+        except Exception:
+            pass  # Diretório já existe

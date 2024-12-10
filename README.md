@@ -1,18 +1,15 @@
-<div align="right">
-    <a href="README.md">🇧🇷 Português</a> &nbsp;&nbsp;|&nbsp;&nbsp;
-    <a href="README_en.md">🇺🇸 English</a>
-</div>
+# NokTech Deploy
 
-<div align="center">
-  <img src="src/assets/logo.webp" alt="NokTech Deploy Logo" width="200"/>
-  <h1>NokTech Deploy</h1>
-  <p><strong>Cliente de deploy avançado com suporte a múltiplos protocolos</strong></p>
-  
-  ![Version](https://img.shields.io/badge/version-0.1.2-blue.svg)
-  ![License](https://img.shields.io/badge/license-MIT-green.svg)
-  ![Python](https://img.shields.io/badge/python-3.8.1+-yellow.svg)
-  ![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)
-</div>
+---
+
+![NokTech Deploy Logo](src/assets/logo.webp)
+
+## Cliente de deploy avançado com suporte a múltiplos protocolos
+
+![Version](https://img.shields.io/badge/version-0.1.2-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Python](https://img.shields.io/badge/python-3.8.1+-yellow.svg)
+![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)
 
 ## 📋 Índice
 
@@ -47,6 +44,7 @@
   - MacOS
 
 ## 🚀 Instalação
+
 ```bash
 # Via pip
 pip install noktech-deploy
@@ -64,6 +62,7 @@ python build_config.py build
 ## 💻 Uso
 
 ### Comandos Básicos
+
 ```bash
 # Modo Interativo
 noktech-deploy
@@ -79,6 +78,7 @@ noktech-deploy --protocol local --files-path ./dados --dest-path /backup
 ```
 
 ### Comandos Avançados
+
 ```bash
 # Watch Mode
 noktech-deploy --watch --files-path ./src
@@ -96,17 +96,19 @@ noktech-deploy --config-file ./deploy.json
 ## ⚙️ Configuração
 
 ### Estrutura de Diretórios
-```
+
+```plaintext
 .noktech-deploy/
 ├── config/           # Configurações do sistema
 │   └── config.json   # Configuração principal
 ├── logs/            # Logs do sistema
 │   ├── deploy-YYYY-MM.log
-│   └── version-YYYY-MM.log
+│   └─── version-YYYY-MM.log
 └── .deployignore    # Regras de ignore
 ```
 
 ### Arquivo config.json para configuração principal
+
 ```json
 {
     "default_protocol": "ssh",
@@ -157,97 +159,17 @@ noktech-deploy --config-file ./deploy.json
     ]
 }
 ```
+
 ### Arquivo .deployignore para ignorar arquivos específicos no deploy
-````bash
-# Arquivos de desenvolvimento
+
+```plaintext
 __pycache__/
-*.py[cod]
-*$py.class
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Ambientes virtuais
 .env
-.venv/
-venv/
-ENV/
-env/
-
-# IDEs e editores
-.idea/
-.vscode/
-*.swp
-*.swo
-.project
-.pydevproject
-.settings/
-*.sublime-workspace
-*.sublime-project
-
-# Logs e caches
-*.log
-logs/
-.coverage
-coverage/
-htmlcov/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.cache/
-
-# Sistema operacional
-.DS_Store
-Thumbs.db
-*.tmp
-*~
-Desktop.ini
-
-# Arquivos de configuração local
-*.local.json
-*.local.yml
-*.local.yaml
-config.local.*
-.env.local
-
-# Dependências
 node_modules/
-bower_components/
-jspm_packages/
-web_modules/
-
-# Arquivos de build
-dist/
-build/
-out/
-*.min.js
-*.min.css
-
-# Forçar inclusão de arquivos específicos
-!dist/assets/
-!dist/static/
-!build/production.config.js
-
-# Arquivos sensíveis
-*.pem
-*.key
-*.cert
-*.password
-secrets.json
-credentials.json
+.DS_Store
+.gitignore
+.git/
+.noktech-deploy/
 ```
 
 ## 🛠️ Desenvolvimento
@@ -327,6 +249,7 @@ pip install dist/noktech_deploy-*.whl
 - [Changelog](CHANGELOG.md)
 
 ### Verificação de Versão
+
 O NokTech Deploy verifica automaticamente se sua versão local está atualizada em relação à versão remota no repositório oficial. Quando uma divergência é detectada:
 
 1. Uma mensagem de alerta é exibida
@@ -334,7 +257,8 @@ O NokTech Deploy verifica automaticamente se sua versão local está atualizada 
 3. O usuário é notificado para atualizar
 
 Os logs de versão são armazenados em:
-```
+
+```plaintext
 .noktech-deploy/logs/version-YYYY-MM.log
 ```
 
@@ -344,6 +268,7 @@ Este projeto está licenciado sob a MIT License - veja o arquivo [LICENSE](LICEN
 
 ## 👤 Autor
 
-**Brendown Ferreira**
+Brendown Ferreira
+
 - GitHub: [@Br3n0k](https://github.com/Br3n0k)
-- Email: br3n0k@gmail.com
+- Email: [br3n0k@gmail.com](mailto:br3n0k@gmail.com)

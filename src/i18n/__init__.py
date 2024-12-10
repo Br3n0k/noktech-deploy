@@ -1,88 +1,45 @@
-from typing import Dict
 import json
-import locale
-import logging
-from pathlib import Path
-from .validator import LanguageValidator
 import os
-
-logger = logging.getLogger(__name__)
-
+from pathlib import Path
+from typing import Dict, Any
 
 class I18n:
-    SUPPORTED_LANGUAGES = {"en_us": "English", "pt_br": "Português"}
-
-    def __init__(self):
-        self._validate_languages()
-        self.current_lang = self._detect_system_language()
-        self.translations = self._load_translations()
-
-    def _validate_languages(self):
-        """Valida arquivos de idioma"""
-        validator = LanguageValidator()
-        is_valid, errors = validator.validate_languages()
-
-        if not is_valid:
-            error_msg = "\n".join(errors)
-            logger.error(f"Erro na validação de idiomas:\n{error_msg}")
-            raise ValueError(f"Arquivos de idioma inválidos:\n{error_msg}")
-
-    def _detect_system_language(self) -> str:
-        """Detecta idioma do sistema"""
+    _instance = None
+    _strings: Dict[str, str] = {}
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._load_strings()
+        return cls._instance
+        
+    def _load_strings(self):
+        """Carrega strings de tradução"""
         try:
-            locale.setlocale(locale.LC_ALL, "")
-            sys_lang = locale.getlocale()[0]
-            if sys_lang:
-                if sys_lang.lower().startswith("pt"):
-                    return "pt_br"
-                return "en_us"  # fallback
-        except (locale.Error, TypeError) as e:
-            self.logger.warning(f"Erro ao detectar idioma do sistema: {e}")
-            return "en_us"
-
-    def _load_translations(self) -> Dict:
-        """Carrega arquivo de tradução"""
-        lang_file = Path(__file__).parent / "lang" / f"{self.current_lang}.json"
-
-        if not lang_file.exists():
-            lang_file = Path(__file__).parent / "lang" / "en_us.json"
-
-        with open(lang_file, "r", encoding="utf-8") as f:
-            return json.load(f)
-
-    def get(self, key: str) -> str:
-        """Retorna texto traduzido"""
-        return self.translations.get(key, key)
-
-    def change_language(self, lang_code: str) -> bool:
-        """Muda o idioma do sistema"""
-        if lang_code in self.SUPPORTED_LANGUAGES:
-            self.current_lang = lang_code
-            self.translations = self._load_translations()
-            return True
-        return False
-
-    def show_language_menu(self):
-        """Mostra menu de seleção de idioma"""
-        print(
-            self.get("language.current").format(
-                self.SUPPORTED_LANGUAGES[self.current_lang]
-            )
-        )
-        print(self.get("language.select"))
-        for code, name in self.SUPPORTED_LANGUAGES.items():
-            print(f"  {code} - {name}")
-
-    def _load_language_file(self, lang: str) -> dict:
-        """Carrega arquivo de idioma"""
+            lang = os.getenv("LANG", "pt_BR").lower()[:5]
+            lang_file = Path(__file__).parent / "lang" / f"{lang}.json"
+            
+            if not lang_file.exists():
+                lang_file = Path(__file__).parent / "lang" / "pt_br.json"
+                
+            with open(lang_file, 'r', encoding='utf-8') as f:
+                self._strings = json.load(f)
+                
+        except Exception as e:
+            print(f"Erro ao carregar traduções: {str(e)}")
+            self._strings = {}
+            
+    def get(self, key: str, default: str = "") -> str:
+        """Obtém string traduzida"""
+        return self._strings.get(key, default)
+        
+    def format(self, key: str, *args: Any, **kwargs: Any) -> str:
+        """Formata string traduzida com argumentos"""
+        text = self.get(key)
+        if not text:
+            return key
+            
         try:
-            lang_file = os.path.join(os.path.dirname(__file__), "lang", f"{lang}.json")
-
-            with open(lang_file, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except FileNotFoundError:
-            self.logger.error(f"Language file not found: {lang}")
-            return self._load_language_file("en_us")
-        except json.JSONDecodeError:
-            self.logger.error(f"Invalid JSON in language file: {lang}")
-            return self._load_language_file("en_us")
+            return text.format(*args, **kwargs)
+        except Exception:
+            return text
